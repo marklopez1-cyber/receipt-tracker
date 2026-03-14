@@ -459,7 +459,34 @@ async function doSave() {
   capForm();
   const {store,date,amount,category,notes}=editForm;
   if(!amount||isNaN(parseFloat(amount))){alert('Please enter a valid amount.');return;}
-  const r={id:Date.now().toString(),store:store||'',date,amount:parseFloat(amount),category,notes,image:pendingImage||null,createdAt:new Date().toISOString()};
+  const parsedAmount=parseFloat(amount);
+
+  // Duplicate detection — match on date + amount, and optionally store name
+  const duplicates=receipts.filter(r=>{
+    const sameDate = r.date && date && r.date===date;
+    const sameAmount = Math.abs(parseFloat(r.amount||0)-parsedAmount)<0.01;
+    const sameStore = store && r.store && r.store.trim().toLowerCase()===store.trim().toLowerCase();
+    // Flag if same date+amount, or same date+store+amount
+    return sameDate && sameAmount || (sameStore && sameAmount);
+  });
+
+  if(duplicates.length>0){
+    const d=duplicates[0];
+    const msg=`A possible duplicate was found:
+
+`+
+      `  Store:  ${d.store||'Unknown'}
+`+
+      `  Date:   ${d.date||'—'}
+`+
+      `  Amount: $${parseFloat(d.amount).toFixed(2)}
+
+`+
+      `Save anyway?`;
+    if(!confirm(msg)) return;
+  }
+
+  const r={id:Date.now().toString(),store:store||'',date,amount:parsedAmount,category,notes,image:pendingImage||null,createdAt:new Date().toISOString()};
   await persistReceipt(r);
   pendingImage=null;pendingB64=null;scanStatus=null;
   editForm={store:'',date:'',amount:'',category:'Fuel',notes:''};
