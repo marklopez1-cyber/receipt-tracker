@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReceiptTrack – Expense Manager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f7f6f2; --surface: #ffffff; --surface2: #f0ede6;
+    --text: #1a1a18; --text2: #6b6b65; --text3: #9b9b95;
+    --accent: #2d5a27; --accent-light: #e8f0e7; --accent-mid: #4a8a42;
+    --border: rgba(0,0,0,0.08); --border2: rgba(0,0,0,0.14);
+    --danger: #c0392b; --warning: #d4750a; --info: #185fa5;
+    --fuel: #d4750a; --supplies: #185fa5; --equipment: #6b3fa0; --meals: #c0392b; --other: #5f5e5a;
+    --fuel-bg: #faeeda; --supplies-bg: #e6f1fb; --equipment-bg: #f0ebfa; --meals-bg: #fcebeb; --other-bg: #f1efe8;
+    --radius: 10px; --radius-sm: 6px;
+    font-family: 'Georgia', serif;
+  }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; }
+  .app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  .header { background: var(--accent); color: white; padding: 18px 20px 14px; position: sticky; top: 0; z-index: 100; }
+  .header-top { display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo span { opacity: 0.6; font-weight: 400; font-size: 13px; display: block; margin-top: 1px; }
+  .header-actions { display: flex; gap: 8px; }
+  .btn-icon { background: rgba(255,255,255,0.15); border: none; color: white; border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+  .btn-icon:hover { background: rgba(255,255,255,0.25); }
+  .nav { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .nav-item { flex: 1; padding: 12px 8px; text-align: center; font-size: 11px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: Georgia, serif; }
+  .nav-item.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .nav-icon { font-size: 16px; margin-bottom: 2px; }
+  .content { flex: 1; padding: 16px; overflow-y: auto; }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .summary-card { background: var(--surface); border-radius: var(--radius); padding: 14px; border: 1px solid var(--border); }
+  .summary-card.accent { background: var(--accent); color: white; }
+  .summary-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .summary-card.accent .summary-label { color: rgba(255,255,255,0.7); }
+  .summary-value { font-size: 22px; font-weight: 700; color: var(--text); }
+  .summary-card.accent .summary-value { color: white; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 10px; }
+  .category-bars { background: var(--surface); border-radius: var(--radius); padding: 14px; border: 1px solid var(--border); margin-bottom: 16px; }
+  .cat-row { margin-bottom: 12px; }
+  .cat-row:last-child { margin-bottom: 0; }
+  .cat-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .cat-name { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .cat-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .cat-amount { font-size: 13px; font-weight: 600; }
+  .cat-bar-bg { height: 5px; background: var(--surface2); border-radius: 3px; }
+  .cat-bar-fill { height: 5px; border-radius: 3px; transition: width 0.5s ease; }
+  .receipt-card { background: var(--surface); border-radius: var(--radius); padding: 14px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; transition: box-shadow 0.15s; }
+  .receipt-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .receipt-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .receipt-name { font-size: 15px; font-weight: 600; }
+  .receipt-amount { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .receipt-meta { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+  .receipt-date { font-size: 12px; color: var(--text3); }
+  .cat-badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .cat-badge.Fuel { background: var(--fuel-bg); color: var(--fuel); }
+  .cat-badge.Supplies { background: var(--supplies-bg); color: var(--info); }
+  .cat-badge.Equipment { background: var(--equipment-bg); color: var(--equipment); }
+  .cat-badge.Meals { background: var(--meals-bg); color: var(--danger); }
+  .cat-badge.Other { background: var(--other-bg); color: var(--other); }
+  .receipt-notes { font-size: 12px; color: var(--text2); margin-top: 6px; font-style: italic; }
+  .has-photo { font-size: 10px; color: var(--accent); margin-top: 4px; }
+  .empty-state { text-align: center; padding: 48px 20px; color: var(--text3); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-title { font-size: 16px; color: var(--text2); margin-bottom: 6px; font-weight: 600; }
+  .empty-sub { font-size: 13px; line-height: 1.5; }
+  .scan-area { background: var(--surface); border-radius: var(--radius); border: 2px dashed var(--border2); padding: 28px 20px; text-align: center; margin-bottom: 16px; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .scan-area:hover { border-color: var(--accent-mid); background: var(--accent-light); }
+  .scan-icon { font-size: 32px; margin-bottom: 10px; }
+  .scan-text { font-size: 14px; color: var(--text2); margin-bottom: 4px; }
+  .scan-sub { font-size: 12px; color: var(--text3); }
+  .scan-actions { display: flex; gap: 10px; margin-top: 14px; justify-content: center; }
+  .btn-primary { background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+  .btn-primary:hover { background: var(--accent-mid); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+  .btn-secondary:hover { background: var(--border); }
+  .preview-img { width: 100%; max-height: 200px; object-fit: contain; border-radius: var(--radius-sm); margin-bottom: 12px; border: 1px solid var(--border); }
+  .ai-status { background: var(--accent-light); border: 1px solid rgba(45,90,39,0.2); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; color: var(--accent); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid rgba(45,90,39,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; display: block; }
+  .form-input { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; color: var(--text); font-family: inherit; outline: none; transition: border-color 0.15s; }
+  .form-input:focus { border-color: var(--accent); }
+  .form-select { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; color: var(--text); font-family: inherit; outline: none; appearance: none; cursor: pointer; }
+  .form-select:focus { border-color: var(--accent); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: flex-end; }
+  .modal { background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-height: 85vh; overflow-y: auto; padding: 20px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .modal-title { font-size: 17px; font-weight: 700; }
+  .modal-close { background: var(--surface2); border: none; width: 28px; height: 28px; border-radius: 50%; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .modal-detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .modal-detail-label { color: var(--text2); }
+  .modal-detail-value { font-weight: 600; text-align: right; max-width: 60%; }
+  .modal-img { width: 100%; max-height: 220px; object-fit: contain; border-radius: var(--radius-sm); margin-bottom: 14px; border: 1px solid var(--border); }
+  .btn-danger { background: #fee; color: var(--danger); border: 1px solid rgba(192,57,43,0.2); border-radius: var(--radius-sm); padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; width: 100%; margin-top: 14px; }
+  .filter-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
+  .filter-chip { white-space: nowrap; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .filter-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .total-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; position: sticky; bottom: 0; }
+  .total-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .total-value { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .file-input { display: none; }
+
+  /* API Key Setup */
+  .api-banner { background: #fff8e1; border: 1px solid #f0c040; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; font-size: 13px; color: #7a5c00; }
+  .api-banner strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  .api-banner a { color: #185fa5; }
+  .api-key-form { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 16px; }
+  .api-key-form .form-label { margin-bottom: 8px; }
+  .api-key-row { display: flex; gap: 8px; }
+  .api-key-row .form-input { flex: 1; font-family: monospace; font-size: 12px; }
+  .key-saved { color: var(--accent); font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="header">
+    <div class="header-top">
+      <div class="logo">ReceiptTrack <span>Expense Manager</span></div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="showApiSetup()">⚙ API</button>
+        <button class="btn-icon" onclick="exportToExcel()">⬇ Export</button>
+      </div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-item active" onclick="showTab('dashboard')" id="tab-dashboard"><div class="nav-icon">◼</div>Dashboard</div>
+    <div class="nav-item" onclick="showTab('receipts')" id="tab-receipts"><div class="nav-icon">☰</div>Receipts</div>
+    <div class="nav-item" onclick="showTab('scan')" id="tab-scan"><div class="nav-icon">+</div>Scan / Add</div>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+
+<input type="file" id="file-input" class="file-input" accept="image/*">
+
+<script>
+let receipts = JSON.parse(localStorage.getItem('rt_receipts') || '[]');
+let apiKey = localStorage.getItem('rt_apikey') || '';
+let currentTab = 'dashboard';
+let currentFilter = 'All';
+let pendingImage = null;
+let pendingImageB64 = null;
+let pendingImageMime = 'image/jpeg';
+let editForm = { store: '', date: '', amount: '', category: 'Fuel', notes: '' };
+let scanning = false;
+
+const CATEGORIES = ['Fuel', 'Supplies', 'Equipment', 'Meals', 'Other'];
+const CAT_COLORS = { Fuel: '#d4750a', Supplies: '#185fa5', Equipment: '#6b3fa0', Meals: '#c0392b', Other: '#5f5e5a' };
+
+function save() { localStorage.setItem('rt_receipts', JSON.stringify(receipts)); }
+function saveKey(k) { apiKey = k; localStorage.setItem('rt_apikey', k); }
+
+function showTab(tab) {
+  currentTab = tab;
+  ['dashboard','receipts','scan'].forEach(t => {
+    document.getElementById('tab-' + t).className = 'nav-item' + (t === tab ? ' active' : '');
+  });
+  if (tab === 'scan') { pendingImage = null; pendingImageB64 = null; editForm = { store: '', date: '', amount: '', category: 'Fuel', notes: '' }; }
+  render();
+}
+
+function fmt(n) { return '$' + parseFloat(n || 0).toFixed(2); }
+function total(arr) { return arr.reduce((s, r) => s + parseFloat(r.amount || 0), 0); }
+
+function render() {
+  const el = document.getElementById('content');
+  if (currentTab === 'dashboard') el.innerHTML = renderDashboard();
+  if (currentTab === 'receipts') el.innerHTML = renderReceipts();
+  if (currentTab === 'scan') el.innerHTML = renderScan();
+  attachEvents();
+}
+
+function renderDashboard() {
+  const tot = total(receipts);
+  const thisMonth = receipts.filter(r => r.date && r.date.startsWith(new Date().toISOString().slice(0,7)));
+  const monthTot = total(thisMonth);
+  const catTotals = {};
+  CATEGORIES.forEach(c => { catTotals[c] = total(receipts.filter(r => r.category === c)); });
+  const maxCat = Math.max(...Object.values(catTotals), 1);
+  const recent = [...receipts].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0,5);
+  return `
+  ${!apiKey ? `<div class="api-banner"><strong>⚙ Setup Required</strong>To enable AI receipt scanning, tap the ⚙ API button above and enter your <a href="https://console.anthropic.com" target="_blank">Anthropic API key</a>. Manual entry always works without a key.</div>` : ''}
+  <div class="summary-grid">
+    <div class="summary-card accent"><div class="summary-label">Total Spent</div><div class="summary-value">${fmt(tot)}</div></div>
+    <div class="summary-card"><div class="summary-label">This Month</div><div class="summary-value">${fmt(monthTot)}</div></div>
+    <div class="summary-card"><div class="summary-label">Receipts</div><div class="summary-value">${receipts.length}</div></div>
+    <div class="summary-card"><div class="summary-label">Avg Receipt</div><div class="summary-value">${receipts.length ? fmt(tot / receipts.length) : '$0.00'}</div></div>
+  </div>
+  <div class="section-title">By Category</div>
+  <div class="category-bars">
+    ${CATEGORIES.map(c => `<div class="cat-row">
+      <div class="cat-top"><div class="cat-name"><div class="cat-dot" style="background:${CAT_COLORS[c]}"></div>${c}</div><div class="cat-amount">${fmt(catTotals[c])}</div></div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${(catTotals[c]/maxCat*100).toFixed(1)}%;background:${CAT_COLORS[c]}"></div></div>
+    </div>`).join('')}
+  </div>
+  ${recent.length ? `<div class="section-title">Recent Receipts</div>${recent.map(r => receiptCardHTML(r)).join('')}` : ''}
+  ${receipts.length === 0 ? `<div class="empty-state"><div class="empty-icon">🧾</div><div class="empty-title">No receipts yet</div><div class="empty-sub">Tap Scan / Add to capture your first receipt.</div></div>` : ''}`;
+}
+
+function renderReceipts() {
+  const filtered = currentFilter === 'All' ? receipts : receipts.filter(r => r.category === currentFilter);
+  const sorted = [...filtered].sort((a,b) => new Date(b.date) - new Date(a.date));
+  return `
+  <div class="filter-row">
+    ${['All', ...CATEGORIES].map(f => `<button class="filter-chip${currentFilter===f?' active':''}" onclick="setFilter('${f}')">${f}</button>`).join('')}
+  </div>
+  ${sorted.length ? sorted.map(r => receiptCardHTML(r)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in ${currentFilter}</div></div>`}
+  <div style="height:70px"></div>
+  <div class="total-bar"><div class="total-label">Filtered Total</div><div class="total-value">${fmt(total(filtered))}</div></div>`;
+}
+
+function receiptCardHTML(r) {
+  return `<div class="receipt-card" onclick="viewReceipt('${r.id}')">
+    <div class="receipt-top"><div class="receipt-name">${r.store || 'Unknown Store'}</div><div class="receipt-amount">${fmt(r.amount)}</div></div>
+    <div class="receipt-meta"><div class="receipt-date">${r.date || '—'}</div><span class="cat-badge ${r.category||'Other'}">${r.category||'Other'}</span></div>
+    ${r.notes ? `<div class="receipt-notes">${r.notes}</div>` : ''}
+    ${r.image ? `<div class="has-photo">📷 Photo attached</div>` : ''}
+  </div>`;
+}
+
+function renderScan() {
+  const today = new Date().toISOString().slice(0,10);
+  return `
+  ${pendingImage ? `<img class="preview-img" src="${pendingImage}" alt="Receipt preview">` : `
+  <div class="scan-area" onclick="document.getElementById('file-input').click()">
+    <div class="scan-icon">📷</div>
+    <div class="scan-text">Take a photo or upload a receipt</div>
+    <div class="scan-sub">Tap to open camera or choose an image file</div>
+    <div class="scan-actions">
+      <button class="btn-primary" onclick="event.stopPropagation();setCapture('environment')">📷 Camera</button>
+      <button class="btn-secondary" onclick="event.stopPropagation();setCapture(null)">🖼 Gallery</button>
+    </div>
+  </div>`}
+  ${scanning ? `<div class="ai-status"><div class="spinner"></div>AI is reading your receipt…</div>` : ''}
+  <div class="form-group"><label class="form-label">Establishment / Store</label><input class="form-input" id="f-store" type="text" placeholder="e.g. Chevron, Home Depot" value="${editForm.store}"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="f-date" type="date" value="${editForm.date || today}"></div>
+    <div class="form-group"><label class="form-label">Total Amount</label><input class="form-input" id="f-amount" type="number" step="0.01" placeholder="0.00" value="${editForm.amount}"></div>
+  </div>
+  <div class="form-group"><label class="form-label">Category</label>
+    <select class="form-select" id="f-category">${CATEGORIES.map(c => `<option${editForm.category===c?' selected':''}>${c}</option>`).join('')}</select>
+  </div>
+  <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" id="f-notes" type="text" placeholder="e.g. Job site #42, project name" value="${editForm.notes}"></div>
+  <button class="btn-primary" style="width:100%;padding:13px" onclick="saveReceipt()">Save Receipt</button>`;
+}
+
+function attachEvents() {
+  document.getElementById('file-input').onchange = handleFileSelect;
+}
+
+function setFilter(f) { currentFilter = f; render(); }
+
+function setCapture(val) {
+  const fi = document.getElementById('file-input');
+  if (val) fi.setAttribute('capture', val); else fi.removeAttribute('capture');
+  fi.click();
+}
+
+function viewReceipt(id) {
+  const r = receipts.find(x => x.id === id);
+  if (!r) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal">
+    <div class="modal-header"><div class="modal-title">${r.store || 'Receipt'}</div><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+    ${r.image ? `<img class="modal-img" src="${r.image}" alt="Receipt">` : ''}
+    <div class="modal-detail-row"><span class="modal-detail-label">Amount</span><span class="modal-detail-value" style="color:var(--accent);font-size:18px">${fmt(r.amount)}</span></div>
+    <div class="modal-detail-row"><span class="modal-detail-label">Date</span><span class="modal-detail-value">${r.date||'—'}</span></div>
+    <div class="modal-detail-row"><span class="modal-detail-label">Category</span><span class="modal-detail-value"><span class="cat-badge ${r.category}">${r.category}</span></span></div>
+    ${r.notes ? `<div class="modal-detail-row"><span class="modal-detail-label">Notes</span><span class="modal-detail-value">${r.notes}</span></div>` : ''}
+    <div class="modal-detail-row"><span class="modal-detail-label">Saved</span><span class="modal-detail-value">${new Date(r.createdAt).toLocaleDateString()}</span></div>
+    <button class="btn-danger" onclick="deleteReceipt('${r.id}',this)">Delete Receipt</button>
+  </div>`;
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
+function deleteReceipt(id, btn) {
+  receipts = receipts.filter(r => r.id !== id);
+  save();
+  btn.closest('.modal-overlay').remove();
+  render();
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    pendingImage = ev.target.result;
+    pendingImageB64 = ev.target.result.split(',')[1];
+    const mm = ev.target.result.match(/data:([^;]+);/);
+    pendingImageMime = mm ? mm[1] : 'image/jpeg';
+    render();
+    if (apiKey) scanWithAI();
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+async function scanWithAI() {
+  if (!pendingImageB64 || !apiKey) return;
+  scanning = true; render();
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: pendingImageMime, data: pendingImageB64 } },
+          { type: 'text', text: 'Extract from this receipt: store/establishment name, date (YYYY-MM-DD format), total amount (number only, no $ sign). Respond ONLY with valid JSON: {"store":"","date":"","amount":""}. If a field is not found leave it as empty string.' }
+        ]}]
+      })
+    });
+    const data = await resp.json();
+    const text = (data.content || []).map(c => c.text || '').join('');
+    const clean = text.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+    editForm.store = parsed.store || '';
+    editForm.date = parsed.date || '';
+    editForm.amount = parsed.amount || '';
+  } catch(err) { console.error('AI scan error:', err); }
+  scanning = false; render();
+}
+
+function saveReceipt() {
+  const store = document.getElementById('f-store')?.value?.trim();
+  const date = document.getElementById('f-date')?.value;
+  const amount = document.getElementById('f-amount')?.value;
+  const category = document.getElementById('f-category')?.value;
+  const notes = document.getElementById('f-notes')?.value?.trim();
+  if (!amount || isNaN(parseFloat(amount))) { alert('Please enter a valid amount.'); return; }
+  const r = { id: Date.now().toString(), store, date, amount: parseFloat(amount), category, notes, image: pendingImage || null, createdAt: new Date().toISOString() };
+  receipts.unshift(r);
+  save();
+  pendingImage = null; pendingImageB64 = null;
+  editForm = { store: '', date: '', amount: '', category: 'Fuel', notes: '' };
+  showTab('receipts');
+}
+
+function showApiSetup() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal">
+    <div class="modal-header"><div class="modal-title">⚙ API Key Setup</div><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">To enable AI-powered receipt scanning, enter your Anthropic API key. It is stored only in this browser (localStorage) and never sent anywhere except Anthropic's API.</p>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--info)">console.anthropic.com</a></p>
+    <div class="api-key-row">
+      <input class="form-input" id="api-key-input" type="password" placeholder="sk-ant-..." value="${apiKey}" style="font-family:monospace;font-size:12px;flex:1">
+      <button class="btn-primary" onclick="applyKey()">Save</button>
+    </div>
+    ${apiKey ? `<div class="key-saved">✓ API key saved</div>` : ''}
+    ${apiKey ? `<button class="btn-secondary" style="margin-top:10px;width:100%" onclick="clearKey()">Remove Key</button>` : ''}
+  </div>`;
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
+function applyKey() {
+  const val = document.getElementById('api-key-input')?.value?.trim();
+  if (val) { saveKey(val); document.querySelector('.modal-overlay')?.remove(); render(); }
+}
+
+function clearKey() { saveKey(''); document.querySelector('.modal-overlay')?.remove(); render(); }
+
+function exportToExcel() {
+  if (!receipts.length) { alert('No receipts to export yet.'); return; }
+  const rows = receipts.map(r => ({ Date: r.date||'', Store: r.store||'', Amount: parseFloat(r.amount||0), Category: r.category||'', Notes: r.notes||'', 'Has Photo': r.image?'Yes':'No', Saved: new Date(r.createdAt).toLocaleDateString() }));
+  rows.push({});
+  rows.push({ Date:'', Store:'TOTAL', Amount: receipts.reduce((s,r)=>s+parseFloat(r.amount||0),0), Category:'', Notes:'', 'Has Photo':'', Saved:'' });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [12,26,12,14,26,10,14].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'All Receipts');
+  CATEGORIES.forEach(cat => {
+    const catRows = receipts.filter(r=>r.category===cat).map(r=>({ Date:r.date||'', Store:r.store||'', Amount:parseFloat(r.amount||0), Notes:r.notes||'' }));
+    if (catRows.length) {
+      catRows.push({});
+      catRows.push({ Date:'', Store:'TOTAL', Amount:catRows.slice(0,-1).reduce((s,r)=>s+(r.Amount||0),0), Notes:'' });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), cat);
+    }
+  });
+  XLSX.writeFile(wb, `ReceiptTrack_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+render();
+</script>
+</body>
+</html>
