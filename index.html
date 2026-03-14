@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ReceiptTrack">
+<meta name="theme-color" content="#2d5a27">
 <title>ReceiptTrack – Expense Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   :root {
     --bg: #f7f6f2; --surface: #ffffff; --surface2: #f0ede6;
     --text: #1a1a18; --text2: #6b6b65; --text3: #9b9b95;
@@ -18,100 +22,104 @@
     --radius: 10px; --radius-sm: 6px;
     font-family: 'Georgia', serif;
   }
-  body { background: var(--bg); color: var(--text); min-height: 100vh; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; overscroll-behavior: none; }
   .app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
-  .header { background: var(--accent); color: white; padding: 18px 20px 14px; position: sticky; top: 0; z-index: 100; }
+  .header { background: var(--accent); color: white; padding: 18px 16px 14px; padding-top: max(18px, env(safe-area-inset-top)); position: sticky; top: 0; z-index: 100; }
   .header-top { display: flex; align-items: center; justify-content: space-between; }
-  .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
-  .logo span { opacity: 0.6; font-weight: 400; font-size: 13px; display: block; margin-top: 1px; }
-  .header-actions { display: flex; gap: 8px; }
-  .btn-icon { background: rgba(255,255,255,0.15); border: none; color: white; border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
-  .btn-icon:hover { background: rgba(255,255,255,0.25); }
+  .logo { font-size: 19px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo span { opacity: 0.6; font-weight: 400; font-size: 12px; display: block; margin-top: 1px; }
+  .header-actions { display: flex; gap: 6px; }
+  .btn-icon { background: rgba(255,255,255,0.15); border: none; color: white; border-radius: 8px; padding: 8px 10px; font-size: 11px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .btn-icon:active { background: rgba(255,255,255,0.3); }
   .nav { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); }
-  .nav-item { flex: 1; padding: 12px 8px; text-align: center; font-size: 11px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: Georgia, serif; }
+  .nav-item { flex: 1; padding: 11px 8px; text-align: center; font-size: 10px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; font-family: Georgia, serif; }
   .nav-item.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-  .nav-icon { font-size: 16px; margin-bottom: 2px; }
-  .content { flex: 1; padding: 16px; overflow-y: auto; padding-bottom: 80px; }
-  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-  .summary-card { background: var(--surface); border-radius: var(--radius); padding: 14px; border: 1px solid var(--border); }
+  .nav-icon { font-size: 15px; margin-bottom: 2px; }
+  .content { flex: 1; padding: 14px; overflow-y: auto; padding-bottom: 90px; }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .summary-card { background: var(--surface); border-radius: var(--radius); padding: 13px; border: 1px solid var(--border); }
   .summary-card.accent { background: var(--accent); color: white; }
-  .summary-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .summary-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
   .summary-card.accent .summary-label { color: rgba(255,255,255,0.7); }
-  .summary-value { font-size: 22px; font-weight: 700; color: var(--text); }
+  .summary-value { font-size: 21px; font-weight: 700; color: var(--text); }
   .summary-card.accent .summary-value { color: white; }
-  .section-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 10px; }
-  .category-bars { background: var(--surface); border-radius: var(--radius); padding: 14px; border: 1px solid var(--border); margin-bottom: 16px; }
-  .cat-row { margin-bottom: 12px; }
+  .section-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 8px; }
+  .category-bars { background: var(--surface); border-radius: var(--radius); padding: 13px; border: 1px solid var(--border); margin-bottom: 14px; }
+  .cat-row { margin-bottom: 11px; }
   .cat-row:last-child { margin-bottom: 0; }
   .cat-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
   .cat-name { font-size: 13px; display: flex; align-items: center; gap: 6px; }
-  .cat-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .cat-amount { font-size: 13px; font-weight: 600; }
   .cat-bar-bg { height: 5px; background: var(--surface2); border-radius: 3px; }
-  .cat-bar-fill { height: 5px; border-radius: 3px; transition: width 0.5s ease; }
-  .receipt-card { background: var(--surface); border-radius: var(--radius); padding: 14px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; }
-  .receipt-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-  .receipt-top { display: flex; justify-content: space-between; align-items: flex-start; }
-  .receipt-name { font-size: 15px; font-weight: 600; }
-  .receipt-amount { font-size: 18px; font-weight: 700; color: var(--accent); }
-  .receipt-meta { display: flex; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
-  .receipt-date { font-size: 12px; color: var(--text3); }
-  .cat-badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .cat-bar-fill { height: 5px; border-radius: 3px; }
+  .receipt-card { background: var(--surface); border-radius: var(--radius); padding: 13px; border: 1px solid var(--border); margin-bottom: 9px; cursor: pointer; }
+  .receipt-card:active { background: var(--surface2); }
+  .receipt-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .receipt-name { font-size: 15px; font-weight: 600; flex: 1; }
+  .receipt-amount { font-size: 17px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+  .receipt-meta { display: flex; gap: 8px; margin-top: 5px; align-items: center; flex-wrap: wrap; }
+  .receipt-date { font-size: 11px; color: var(--text3); }
+  .cat-badge { font-size: 9px; padding: 2px 7px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
   .cat-badge.Fuel { background: var(--fuel-bg); color: var(--fuel); }
   .cat-badge.Supplies { background: var(--supplies-bg); color: var(--info); }
   .cat-badge.Equipment { background: var(--equipment-bg); color: var(--equipment); }
   .cat-badge.Meals { background: var(--meals-bg); color: var(--danger); }
   .cat-badge.Other { background: var(--other-bg); color: var(--other); }
-  .receipt-notes { font-size: 12px; color: var(--text2); margin-top: 6px; font-style: italic; }
-  .has-photo { font-size: 10px; color: var(--accent); margin-top: 4px; }
+  .receipt-notes { font-size: 11px; color: var(--text2); margin-top: 5px; font-style: italic; }
+  .has-photo { font-size: 10px; color: var(--accent); margin-top: 3px; }
   .empty-state { text-align: center; padding: 48px 20px; color: var(--text3); }
-  .empty-icon { font-size: 40px; margin-bottom: 12px; }
-  .empty-title { font-size: 16px; color: var(--text2); margin-bottom: 6px; font-weight: 600; }
+  .empty-icon { font-size: 38px; margin-bottom: 10px; }
+  .empty-title { font-size: 15px; color: var(--text2); margin-bottom: 5px; font-weight: 600; }
   .empty-sub { font-size: 13px; line-height: 1.5; }
-  .scan-area { background: var(--surface); border-radius: var(--radius); border: 2px dashed var(--border2); padding: 28px 20px; text-align: center; margin-bottom: 16px; cursor: pointer; }
-  .scan-area:hover { border-color: var(--accent-mid); background: var(--accent-light); }
-  .scan-icon { font-size: 32px; margin-bottom: 10px; }
-  .scan-text { font-size: 14px; color: var(--text2); margin-bottom: 4px; }
+  .scan-area { background: var(--surface); border-radius: var(--radius); border: 2px dashed var(--border2); padding: 26px 16px; text-align: center; margin-bottom: 14px; cursor: pointer; }
+  .scan-area:active { background: var(--accent-light); }
+  .scan-icon { font-size: 30px; margin-bottom: 8px; }
+  .scan-text { font-size: 14px; color: var(--text2); margin-bottom: 3px; }
   .scan-sub { font-size: 12px; color: var(--text3); }
-  .scan-actions { display: flex; gap: 10px; margin-top: 14px; justify-content: center; flex-wrap: wrap; }
-  .btn-primary { background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-  .btn-primary:hover { background: var(--accent-mid); }
-  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-  .preview-img { width: 100%; max-height: 220px; object-fit: contain; border-radius: var(--radius-sm); margin-bottom: 12px; border: 1px solid var(--border); }
-  .status-box { border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; margin-bottom: 14px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
+  .scan-actions { display: flex; gap: 10px; margin-top: 13px; justify-content: center; }
+  .btn-primary { background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); padding: 11px 18px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-primary:active { background: var(--accent-mid); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 11px 18px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-secondary:active { opacity: 0.7; }
+  .preview-img { width: 100%; max-height: 200px; object-fit: contain; border-radius: var(--radius-sm); margin-bottom: 11px; border: 1px solid var(--border); }
+  .status-box { border-radius: var(--radius-sm); padding: 11px 13px; font-size: 13px; margin-bottom: 13px; display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; }
   .status-box.scanning { background: var(--accent-light); border: 1px solid rgba(45,90,39,0.25); color: var(--accent); }
   .status-box.error { background: #fff0f0; border: 1px solid rgba(192,57,43,0.25); color: var(--danger); }
   .status-box.success { background: #f0fff4; border: 1px solid rgba(45,90,39,0.25); color: #1a6b2a; }
   .status-box.warn { background: #fff8e1; border: 1px solid #f0c040; color: #7a5c00; }
-  .spinner { width: 16px; height: 16px; border: 2px solid rgba(45,90,39,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; margin-top: 1px; }
+  .spinner { width: 15px; height: 15px; border: 2px solid rgba(45,90,39,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; margin-top: 2px; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .form-group { margin-bottom: 14px; }
-  .form-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; display: block; }
-  .form-input { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; color: var(--text); font-family: inherit; outline: none; }
+  .form-group { margin-bottom: 13px; }
+  .form-label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; display: block; }
+  .form-input { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 11px 12px; font-size: 16px; color: var(--text); font-family: inherit; outline: none; -webkit-appearance: none; }
   .form-input:focus { border-color: var(--accent); }
-  .form-select { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; color: var(--text); font-family: inherit; outline: none; appearance: none; cursor: pointer; }
+  .form-select { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 11px 12px; font-size: 16px; color: var(--text); font-family: inherit; outline: none; -webkit-appearance: none; cursor: pointer; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: flex-end; }
-  .modal { background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-height: 88vh; overflow-y: auto; padding: 20px; }
-  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .modal-title { font-size: 17px; font-weight: 700; }
-  .modal-close { background: var(--surface2); border: none; width: 28px; height: 28px; border-radius: 50%; font-size: 14px; cursor: pointer; }
-  .modal-detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
-  .modal-detail-label { color: var(--text2); }
-  .modal-detail-value { font-weight: 600; text-align: right; max-width: 65%; }
-  .modal-img { width: 100%; max-height: 240px; object-fit: contain; border-radius: var(--radius-sm); margin-bottom: 14px; border: 1px solid var(--border); }
-  .btn-danger { background: #fee; color: var(--danger); border: 1px solid rgba(192,57,43,0.2); border-radius: var(--radius-sm); padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; width: 100%; margin-top: 14px; }
-  .filter-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
-  .filter-chip { white-space: nowrap; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; font-family: inherit; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 200; display: flex; align-items: flex-end; }
+  .modal { background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-height: 88vh; overflow-y: auto; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+  .modal-title { font-size: 16px; font-weight: 700; }
+  .modal-close { background: var(--surface2); border: none; width: 30px; height: 30px; border-radius: 50%; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .modal-detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; gap: 12px; }
+  .modal-detail-label { color: var(--text2); flex-shrink: 0; }
+  .modal-detail-value { font-weight: 600; text-align: right; }
+  .modal-img { width: 100%; max-height: 230px; object-fit: contain; border-radius: var(--radius-sm); margin-bottom: 13px; border: 1px solid var(--border); }
+  .btn-danger { background: #fee; color: var(--danger); border: 1px solid rgba(192,57,43,0.2); border-radius: var(--radius-sm); padding: 11px 18px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; width: 100%; margin-top: 13px; }
+  .filter-row { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 13px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-chip { white-space: nowrap; padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; font-family: inherit; }
   .filter-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
-  .total-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; z-index: 50; }
-  .total-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
-  .total-value { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .total-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; z-index: 50; }
+  .total-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .total-value { font-size: 19px; font-weight: 700; color: var(--accent); }
   .file-input { display: none; }
   .api-key-row { display: flex; gap: 8px; margin-top: 10px; }
-  .api-key-row .form-input { flex: 1; font-family: monospace; font-size: 12px; }
-  .divider { height: 1px; background: var(--border); margin: 16px 0; }
-  .scan-retry { margin-top: 10px; }
+  .api-key-row .form-input { flex: 1; font-family: monospace; font-size: 13px; }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+  .init-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 12px; color: var(--text2); }
+  .backup-row { display: flex; gap: 10px; }
+  .backup-row .btn-secondary { flex: 1; font-size: 13px; padding: 10px 10px; }
 </style>
 </head>
 <body>
@@ -120,8 +128,9 @@
     <div class="header-top">
       <div class="logo">ReceiptTrack <span>Expense Manager</span></div>
       <div class="header-actions">
-        <button class="btn-icon" onclick="showApiSetup()">⚙ API Key</button>
-        <button class="btn-icon" onclick="exportToExcel()">⬇ Export</button>
+        <button class="btn-icon" onclick="showApiSetup()">⚙ API</button>
+        <button class="btn-icon" onclick="showBackup()">☁ Backup</button>
+        <button class="btn-icon" onclick="exportToExcel()">⬇ Excel</button>
       </div>
     </div>
   </div>
@@ -130,27 +139,127 @@
     <div class="nav-item" onclick="showTab('receipts')" id="tab-receipts"><div class="nav-icon">☰</div>Receipts</div>
     <div class="nav-item" onclick="showTab('scan')" id="tab-scan"><div class="nav-icon">+</div>Scan / Add</div>
   </div>
-  <div class="content" id="content"></div>
+  <div class="content" id="content"><div class="init-screen"><div style="font-size:32px">🧾</div><div>Loading…</div></div></div>
 </div>
 <input type="file" id="file-input" class="file-input" accept="image/*">
+<input type="file" id="import-input" class="file-input" accept=".json">
 
 <script>
-let receipts = JSON.parse(localStorage.getItem('rt_receipts') || '[]');
-let apiKey = localStorage.getItem('rt_apikey') || '';
+// ── IndexedDB wrapper ──────────────────────────────────────────────
+const DB_NAME = 'ReceiptTrackDB';
+const DB_VER  = 1;
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('receipts')) d.createObjectStore('receipts', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'key' });
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+function dbGetAll(store) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+function dbPut(store, obj) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).put(obj);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+function dbDelete(store, key) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+async function getSetting(key) {
+  return new Promise((resolve) => {
+    const tx = db.transaction('settings', 'readonly');
+    const req = tx.objectStore('settings').get(key);
+    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+    req.onerror   = () => resolve(null);
+  });
+}
+
+async function setSetting(key, value) { await dbPut('settings', { key, value }); }
+async function deleteSetting(key) { await dbDelete('settings', key); }
+
+// ── App State ──────────────────────────────────────────────────────
+let receipts = [];
+let apiKey = '';
 let currentTab = 'dashboard';
 let currentFilter = 'All';
 let pendingImage = null;
 let pendingImageB64 = null;
 let pendingImageMime = 'image/jpeg';
 let editForm = { store: '', date: '', amount: '', category: 'Fuel', notes: '' };
-let scanStatus = null; // { type: 'scanning'|'success'|'error'|'warn', msg: '' }
+let scanStatus = null;
 
 const CATEGORIES = ['Fuel', 'Supplies', 'Equipment', 'Meals', 'Other'];
-const CAT_COLORS = { Fuel: '#d4750a', Supplies: '#185fa5', Equipment: '#6b3fa0', Meals: '#c0392b', Other: '#5f5e5a' };
+const CAT_COLORS  = { Fuel:'#d4750a', Supplies:'#185fa5', Equipment:'#6b3fa0', Meals:'#c0392b', Other:'#5f5e5a' };
 
-function save() { localStorage.setItem('rt_receipts', JSON.stringify(receipts)); }
-function saveKey(k) { apiKey = k.trim(); localStorage.setItem('rt_apikey', apiKey); }
+// ── Init ───────────────────────────────────────────────────────────
+async function init() {
+  try {
+    await openDB();
+    receipts = await dbGetAll('receipts');
+    apiKey = (await getSetting('apiKey')) || '';
+    showTab('dashboard');
+  } catch(err) {
+    console.error('DB init failed, falling back to localStorage', err);
+    // Graceful fallback to localStorage
+    receipts = JSON.parse(localStorage.getItem('rt_receipts') || '[]');
+    apiKey   = localStorage.getItem('rt_apikey') || '';
+    showTab('dashboard');
+  }
+}
 
+async function saveReceipts() {
+  // IndexedDB is source of truth; localStorage is fallback backup
+  try {
+    for (const r of receipts) await dbPut('receipts', r);
+    localStorage.setItem('rt_receipts_backup', JSON.stringify(receipts));
+  } catch(e) {
+    localStorage.setItem('rt_receipts', JSON.stringify(receipts));
+  }
+}
+
+async function saveApiKey(key) {
+  apiKey = key;
+  try {
+    if (key) await setSetting('apiKey', key);
+    else await deleteSetting('apiKey');
+    localStorage.setItem('rt_apikey_backup', key);
+  } catch(e) {
+    localStorage.setItem('rt_apikey', key);
+  }
+}
+
+async function deleteReceiptById(id) {
+  receipts = receipts.filter(r => r.id !== id);
+  try { await dbDelete('receipts', id); } catch(e) {}
+  localStorage.setItem('rt_receipts_backup', JSON.stringify(receipts));
+}
+
+// ── UI ─────────────────────────────────────────────────────────────
 function showTab(tab) {
   currentTab = tab;
   ['dashboard','receipts','scan'].forEach(t => {
@@ -158,33 +267,35 @@ function showTab(tab) {
   });
   if (tab === 'scan') {
     pendingImage = null; pendingImageB64 = null; scanStatus = null;
-    editForm = { store: '', date: '', amount: '', category: 'Fuel', notes: '' };
+    editForm = { store:'', date:'', amount:'', category:'Fuel', notes:'' };
   }
   render();
 }
 
 function fmt(n) { return '$' + parseFloat(n || 0).toFixed(2); }
 function total(arr) { return arr.reduce((s, r) => s + parseFloat(r.amount || 0), 0); }
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return String(s||'').replace(/"/g,'&quot;'); }
 
 function render() {
   const el = document.getElementById('content');
   if (currentTab === 'dashboard') el.innerHTML = renderDashboard();
   else if (currentTab === 'receipts') el.innerHTML = renderReceipts();
-  else if (currentTab === 'scan') el.innerHTML = renderScan();
+  else el.innerHTML = renderScan();
   document.getElementById('file-input').onchange = handleFileSelect;
+  document.getElementById('import-input').onchange = handleImport;
 }
 
 function renderDashboard() {
   const tot = total(receipts);
-  const ym = new Date().toISOString().slice(0,7);
+  const ym  = new Date().toISOString().slice(0,7);
   const monthTot = total(receipts.filter(r => r.date && r.date.startsWith(ym)));
   const catTotals = {};
   CATEGORIES.forEach(c => { catTotals[c] = total(receipts.filter(r => r.category === c)); });
   const maxCat = Math.max(...Object.values(catTotals), 1);
-  const recent = [...receipts].sort((a,b) => new Date(b.date||0) - new Date(a.date||0)).slice(0,5);
-
+  const recent = [...receipts].sort((a,b) => new Date(b.date||0)-new Date(a.date||0)).slice(0,5);
   return `
-  ${!apiKey ? `<div class="status-box warn"><span>⚙</span><div><strong>AI scanning not active.</strong> Tap <strong>⚙ API Key</strong> above and enter your Anthropic API key to enable automatic receipt reading.</div></div>` : ''}
+  ${!apiKey ? `<div class="status-box warn"><span>⚙</span><div>AI scanning inactive. Tap <strong>⚙ API</strong> above to add your Anthropic API key.</div></div>` : ''}
   <div class="summary-grid">
     <div class="summary-card accent"><div class="summary-label">Total Spent</div><div class="summary-value">${fmt(tot)}</div></div>
     <div class="summary-card"><div class="summary-label">This Month</div><div class="summary-value">${fmt(monthTot)}</div></div>
@@ -204,13 +315,13 @@ function renderDashboard() {
 
 function renderReceipts() {
   const filtered = currentFilter === 'All' ? receipts : receipts.filter(r => r.category === currentFilter);
-  const sorted = [...filtered].sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+  const sorted = [...filtered].sort((a,b) => new Date(b.date||0)-new Date(a.date||0));
   return `
   <div class="filter-row">
     ${['All',...CATEGORIES].map(f=>`<button class="filter-chip${currentFilter===f?' active':''}" onclick="setFilter('${f}')">${f}</button>`).join('')}
   </div>
   ${sorted.length ? sorted.map(receiptCardHTML).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in "${currentFilter}"</div></div>`}
-  <div class="total-bar"><div class="total-label">Filtered Total (${filtered.length})</div><div class="total-value">${fmt(total(filtered))}</div></div>`;
+  <div class="total-bar"><div class="total-label">Total (${filtered.length} receipts)</div><div class="total-value">${fmt(total(filtered))}</div></div>`;
 }
 
 function receiptCardHTML(r) {
@@ -225,35 +336,31 @@ function receiptCardHTML(r) {
 function renderScan() {
   const today = new Date().toISOString().slice(0,10);
   const statusHtml = scanStatus ? `<div class="status-box ${scanStatus.type}">
-    ${scanStatus.type === 'scanning' ? '<div class="spinner"></div>' : '<span>' + (scanStatus.type==='success'?'✓':scanStatus.type==='error'?'✕':'⚠') + '</span>'}
-    <div>${scanStatus.msg}${scanStatus.type==='error' ? `<br><button class="btn-secondary scan-retry" onclick="retryOrManual()">Try again</button>` : ''}</div>
+    ${scanStatus.type==='scanning' ? '<div class="spinner"></div>' : `<span>${scanStatus.type==='success'?'✓':scanStatus.type==='error'?'✕':'⚠'}</span>`}
+    <div>${scanStatus.msg}</div>
   </div>` : '';
-
   return `
-  ${!apiKey ? `<div class="status-box warn"><span>⚠</span><div>AI scanning requires an API key. <strong onclick="showApiSetup()" style="cursor:pointer;text-decoration:underline">Tap here to set it up</strong>, or fill the form manually below.</div></div>` : ''}
-
+  ${!apiKey ? `<div class="status-box warn"><span>⚠</span><div>AI scanning needs an API key. <span style="text-decoration:underline;cursor:pointer" onclick="showApiSetup()">Tap to set it up</span> or fill the form manually.</div></div>` : ''}
   ${pendingImage
-    ? `<img class="preview-img" src="${pendingImage}" alt="Receipt preview">
-       ${apiKey ? `<button class="btn-secondary" style="width:100%;margin-bottom:12px" onclick="scanWithAI()">🔄 Re-scan with AI</button>` : ''}`
+    ? `<img class="preview-img" src="${pendingImage}" alt="Receipt">
+       ${apiKey ? `<button class="btn-secondary" style="width:100%;margin-bottom:11px" onclick="scanWithAI()">🔄 Re-scan with AI</button>` : ''}`
     : `<div class="scan-area" onclick="openFilePicker(null)">
         <div class="scan-icon">📷</div>
-        <div class="scan-text">Tap to upload or photograph a receipt</div>
-        <div class="scan-sub">AI will automatically read the details</div>
+        <div class="scan-text">Upload or photograph a receipt</div>
+        <div class="scan-sub">AI will read store, date & total automatically</div>
         <div class="scan-actions">
           <button class="btn-primary" onclick="event.stopPropagation();openFilePicker('environment')">📷 Camera</button>
-          <button class="btn-secondary" onclick="event.stopPropagation();openFilePicker(null)">🖼 Gallery / File</button>
+          <button class="btn-secondary" onclick="event.stopPropagation();openFilePicker(null)">🖼 Gallery</button>
         </div>
        </div>`}
-
   ${statusHtml}
-
   <div class="form-group"><label class="form-label">Establishment / Store</label>
-    <input class="form-input" id="f-store" type="text" placeholder="e.g. Chevron, Home Depot" value="${escAttr(editForm.store)}"></div>
+    <input class="form-input" id="f-store" type="text" placeholder="e.g. Chevron, Home Depot" value="${escAttr(editForm.store)}" autocomplete="organization"></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">Date</label>
-      <input class="form-input" id="f-date" type="date" value="${editForm.date || today}"></div>
+      <input class="form-input" id="f-date" type="date" value="${editForm.date||today}"></div>
     <div class="form-group"><label class="form-label">Amount ($)</label>
-      <input class="form-input" id="f-amount" type="number" step="0.01" min="0" placeholder="0.00" value="${escAttr(editForm.amount)}"></div>
+      <input class="form-input" id="f-amount" type="number" step="0.01" min="0" placeholder="0.00" value="${escAttr(editForm.amount)}" inputmode="decimal"></div>
   </div>
   <div class="form-group"><label class="form-label">Category</label>
     <select class="form-select" id="f-category">
@@ -264,9 +371,7 @@ function renderScan() {
   <button class="btn-primary" style="width:100%;padding:14px;font-size:15px" onclick="saveReceipt()">💾 Save Receipt</button>`;
 }
 
-function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function escAttr(s) { return String(s||'').replace(/"/g,'&quot;'); }
-
+// ── File / Camera ──────────────────────────────────────────────────
 function openFilePicker(capture) {
   const fi = document.getElementById('file-input');
   if (capture) fi.setAttribute('capture', capture); else fi.removeAttribute('capture');
@@ -276,37 +381,37 @@ function openFilePicker(capture) {
 function handleFileSelect(e) {
   const file = e.target.files[0];
   if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    alert('Please select an image file (JPG, PNG, HEIC, etc.)');
-    return;
-  }
+  if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
   const reader = new FileReader();
   reader.onload = ev => {
     pendingImage = ev.target.result;
     const mm = ev.target.result.match(/data:([^;]+);/);
     pendingImageMime = mm ? mm[1] : 'image/jpeg';
-    pendingImageB64 = ev.target.result.split(',')[1];
+    pendingImageB64  = ev.target.result.split(',')[1];
     scanStatus = null;
     render();
     if (apiKey) scanWithAI();
-    else {
-      scanStatus = { type: 'warn', msg: 'No API key set — fill in the fields manually, or tap ⚙ API Key to enable AI scanning.' };
-      render();
-    }
+    else { scanStatus = { type:'warn', msg:'No API key — fill in the details manually or add a key via ⚙ API.' }; render(); }
   };
-  reader.onerror = () => { alert('Could not read that file. Please try another image.'); };
   reader.readAsDataURL(file);
   e.target.value = '';
 }
 
+// ── AI Scan ────────────────────────────────────────────────────────
+function captureFormState() {
+  editForm.store    = document.getElementById('f-store')?.value    ?? editForm.store;
+  editForm.date     = document.getElementById('f-date')?.value     ?? editForm.date;
+  editForm.amount   = document.getElementById('f-amount')?.value   ?? editForm.amount;
+  editForm.category = document.getElementById('f-category')?.value ?? editForm.category;
+  editForm.notes    = document.getElementById('f-notes')?.value    ?? editForm.notes;
+}
+
 async function scanWithAI() {
   captureFormState();
-  if (!pendingImageB64) { scanStatus = { type: 'error', msg: 'No image loaded. Please upload a receipt first.' }; render(); return; }
-  if (!apiKey) { scanStatus = { type: 'warn', msg: 'API key missing. Tap ⚙ API Key to add it.' }; render(); return; }
-
-  scanStatus = { type: 'scanning', msg: 'AI is reading your receipt…' };
+  if (!pendingImageB64) { scanStatus = { type:'error', msg:'No image loaded.' }; render(); return; }
+  if (!apiKey) { scanStatus = { type:'warn', msg:'API key missing.' }; render(); return; }
+  scanStatus = { type:'scanning', msg:'AI is reading your receipt…' };
   render();
-
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -319,84 +424,54 @@ async function scanWithAI() {
       body: JSON.stringify({
         model: 'claude-opus-4-5',
         max_tokens: 512,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: pendingImageMime, data: pendingImageB64 }
-            },
-            {
-              type: 'text',
-              text: `You are an OCR assistant. Look at this receipt image and extract:
-1. store_name: The name of the business/store/restaurant
-2. date: The transaction date in YYYY-MM-DD format
-3. total: The final total amount paid (just the number, no currency symbol)
-
-Return ONLY a raw JSON object with no markdown, no explanation, no backticks:
-{"store_name":"...","date":"...","total":"..."}`
-            }
-          ]
-        }]
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type:'base64', media_type: pendingImageMime, data: pendingImageB64 } },
+          { type: 'text', text: `You are an OCR assistant. Examine this receipt image and extract:
+1. store_name: Business/store name
+2. date: Transaction date in YYYY-MM-DD format
+3. total: Final total amount as a number only (no $ or commas)
+Return ONLY raw JSON, no markdown, no explanation:
+{"store_name":"","date":"","total":""}` }
+        ]}]
       })
     });
-
     if (!resp.ok) {
-      const errData = await resp.json().catch(() => ({}));
-      const errMsg = errData?.error?.message || `HTTP ${resp.status}`;
-      if (resp.status === 401) {
-        scanStatus = { type: 'error', msg: `Invalid API key (401). Please check your key in ⚙ API Key settings.` };
-      } else if (resp.status === 400) {
-        scanStatus = { type: 'error', msg: `Bad request (400): ${errMsg}. The image may be too large or in an unsupported format.` };
-      } else {
-        scanStatus = { type: 'error', msg: `API error ${resp.status}: ${errMsg}` };
-      }
+      const e = await resp.json().catch(()=>({}));
+      const msg = e?.error?.message || `HTTP ${resp.status}`;
+      if (resp.status === 401) scanStatus = { type:'error', msg:'Invalid API key (401). Check your key in ⚙ API settings.' };
+      else scanStatus = { type:'error', msg:`API error ${resp.status}: ${msg}` };
       render(); return;
     }
-
     const data = await resp.json();
-    const rawText = (data.content || []).map(c => c.text || '').join('').trim();
-
-    let parsed = null;
-    try {
-      const clean = rawText.replace(/```json|```/g,'').trim();
-      parsed = JSON.parse(clean);
-    } catch(pe) {
-      scanStatus = { type: 'error', msg: `AI responded but output couldn't be parsed. Raw: "${rawText.slice(0,120)}"` };
-      render(); return;
-    }
-
+    const raw  = (data.content||[]).map(c=>c.text||'').join('').trim();
+    let parsed;
+    try { parsed = JSON.parse(raw.replace(/```json|```/g,'').trim()); }
+    catch { scanStatus = { type:'error', msg:`Could not parse AI response: "${raw.slice(0,100)}"` }; render(); return; }
     const filled = [];
     if (parsed.store_name) { editForm.store = parsed.store_name; filled.push('store'); }
     if (parsed.date && /\d{4}-\d{2}-\d{2}/.test(parsed.date)) { editForm.date = parsed.date; filled.push('date'); }
     if (parsed.total && !isNaN(parseFloat(parsed.total))) { editForm.amount = parseFloat(parsed.total).toFixed(2); filled.push('amount'); }
-
-    if (filled.length === 0) {
-      scanStatus = { type: 'warn', msg: `AI couldn't read clear data from this image. Please fill in the fields manually.` };
-    } else {
-      scanStatus = { type: 'success', msg: `AI read: ${filled.join(', ')}. Review and save below.` };
-    }
-
-  } catch (err) {
-    if (err.name === 'TypeError' && err.message.includes('fetch')) {
-      scanStatus = { type: 'error', msg: 'Network error — check your internet connection and that the API key is correct.' };
-    } else {
-      scanStatus = { type: 'error', msg: `Unexpected error: ${err.message}` };
-    }
+    scanStatus = filled.length
+      ? { type:'success', msg:`AI filled in: ${filled.join(', ')}. Review and save below.` }
+      : { type:'warn',   msg:'AI could not read clear data. Please fill in manually.' };
+  } catch(err) {
+    scanStatus = { type:'error', msg: err.message.includes('fetch') ? 'Network error — check internet connection.' : `Error: ${err.message}` };
   }
-
   render();
 }
 
-function captureFormState() {
-  editForm.store = document.getElementById('f-store')?.value || editForm.store;
-  editForm.date = document.getElementById('f-date')?.value || editForm.date;
-  editForm.amount = document.getElementById('f-amount')?.value || editForm.amount;
-  editForm.category = document.getElementById('f-category')?.value || editForm.category;
-  editForm.notes = document.getElementById('f-notes')?.value || editForm.notes;
+// ── Save / Delete ──────────────────────────────────────────────────
+async function saveReceipt() {
+  captureFormState();
+  const { store, date, amount, category, notes } = editForm;
+  if (!amount || isNaN(parseFloat(amount))) { alert('Please enter a valid amount.'); return; }
+  const r = { id: Date.now().toString(), store:store||'', date, amount:parseFloat(amount), category, notes, image:pendingImage||null, createdAt:new Date().toISOString() };
+  receipts.unshift(r);
+  await saveReceipts();
+  pendingImage = null; pendingImageB64 = null; scanStatus = null;
+  editForm = { store:'', date:'', amount:'', category:'Fuel', notes:'' };
+  showTab('receipts');
 }
-
-function retryOrManual() { if (pendingImageB64 && apiKey) scanWithAI(); else { scanStatus = null; render(); } }
 
 function setFilter(f) { currentFilter = f; render(); }
 
@@ -413,70 +488,111 @@ function viewReceipt(id) {
     <div class="modal-detail-row"><span class="modal-detail-label">Category</span><span class="modal-detail-value"><span class="cat-badge ${r.category}">${r.category}</span></span></div>
     ${r.notes ? `<div class="modal-detail-row"><span class="modal-detail-label">Notes</span><span class="modal-detail-value">${escHtml(r.notes)}</span></div>` : ''}
     <div class="modal-detail-row"><span class="modal-detail-label">Added</span><span class="modal-detail-value">${new Date(r.createdAt).toLocaleDateString()}</span></div>
-    <button class="btn-danger" onclick="deleteReceipt('${r.id}',this)">Delete Receipt</button>
+    <button class="btn-danger" onclick="confirmDelete('${r.id}',this)">Delete Receipt</button>
   </div>`;
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
   document.body.appendChild(ov);
 }
 
-function deleteReceipt(id, btn) {
+async function confirmDelete(id, btn) {
   if (!confirm('Delete this receipt?')) return;
-  receipts = receipts.filter(r => r.id !== id);
-  save(); btn.closest('.modal-overlay').remove(); render();
+  await deleteReceiptById(id);
+  btn.closest('.modal-overlay').remove();
+  render();
 }
 
-function saveReceipt() {
-  captureFormState();
-  const { store, date, amount, category, notes } = editForm;
-  if (!amount || isNaN(parseFloat(amount))) { alert('Please enter a valid amount.'); return; }
-  receipts.unshift({ id: Date.now().toString(), store: store||'', date, amount: parseFloat(amount), category, notes, image: pendingImage||null, createdAt: new Date().toISOString() });
-  save();
-  pendingImage = null; pendingImageB64 = null; scanStatus = null;
-  editForm = { store:'', date:'', amount:'', category:'Fuel', notes:'' };
-  showTab('receipts');
-}
-
+// ── API Key Modal ──────────────────────────────────────────────────
 function showApiSetup() {
   const ov = document.createElement('div');
   ov.className = 'modal-overlay';
   ov.innerHTML = `<div class="modal">
     <div class="modal-header"><div class="modal-title">⚙ Anthropic API Key</div><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px">
-      An API key is required for AI-powered receipt scanning. Your key is stored only in this browser and sent directly to Anthropic — never to any other server.
-    </p>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
-      Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--info)">console.anthropic.com → API Keys</a>.
-    </p>
-    <label class="form-label">API Key (starts with sk-ant-)</label>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px">Required for AI receipt scanning. Your key is stored in IndexedDB on this device only and sent directly to Anthropic.</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:13px">Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--info)">console.anthropic.com → API Keys</a>.</p>
+    <label class="form-label">API Key</label>
     <div class="api-key-row">
       <input class="form-input" id="api-key-input" type="password" placeholder="sk-ant-api03-..." value="${apiKey}">
       <button class="btn-primary" onclick="applyKey()">Save</button>
     </div>
-    ${apiKey ? `<div style="color:var(--accent);font-size:12px;margin-top:8px">✓ Key saved (${apiKey.slice(0,12)}…)</div>
-    <button class="btn-danger" style="margin-top:12px" onclick="clearKey()">Remove Key</button>` : ''}
+    ${apiKey ? `<div style="color:var(--accent);font-size:12px;margin-top:8px">✓ Key saved (${apiKey.slice(0,14)}…)</div>
+    <button class="btn-danger" style="margin-top:10px" onclick="clearKey()">Remove Key</button>` : ''}
     <div class="divider"></div>
-    <p style="font-size:12px;color:var(--text3);line-height:1.5">Cost: roughly $0.01–0.03 per receipt scan. New accounts receive free credits.</p>
+    <p style="font-size:12px;color:var(--text3);line-height:1.5">Cost: ~$0.01–0.03 per scan. New accounts get free credits.</p>
   </div>`;
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
   document.body.appendChild(ov);
 }
 
-function applyKey() {
+async function applyKey() {
   const val = document.getElementById('api-key-input')?.value?.trim();
-  if (!val) { alert('Please paste your API key first.'); return; }
-  if (!val.startsWith('sk-')) { alert('That doesn\'t look like a valid API key — it should start with "sk-ant-".'); return; }
-  saveKey(val);
+  if (!val) { alert('Please paste your API key.'); return; }
+  if (!val.startsWith('sk-')) { alert('Key should start with "sk-ant-". Please check and try again.'); return; }
+  await saveApiKey(val);
   document.querySelector('.modal-overlay')?.remove();
   render();
-  alert('API key saved! Upload a receipt to test AI scanning.');
+  alert('✓ API key saved! Upload a receipt to test AI scanning.');
 }
 
-function clearKey() { if (confirm('Remove API key?')) { saveKey(''); document.querySelector('.modal-overlay')?.remove(); render(); } }
+async function clearKey() {
+  if (!confirm('Remove API key?')) return;
+  await saveApiKey('');
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+}
 
+// ── Backup / Restore ───────────────────────────────────────────────
+function showBackup() {
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal">
+    <div class="modal-header"><div class="modal-title">☁ Backup & Restore</div><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">
+      Your data is stored in IndexedDB on this device. Export a backup JSON file to keep a copy or transfer to another device.
+    </p>
+    <div class="backup-row">
+      <button class="btn-secondary" onclick="exportBackup()">⬇ Export Backup</button>
+      <button class="btn-secondary" onclick="document.getElementById('import-input').click()">⬆ Import Backup</button>
+    </div>
+    <div class="divider"></div>
+    <p style="font-size:12px;color:var(--text3);line-height:1.5"><strong>Tip:</strong> After adding this app to your home screen on iOS/Android, back up regularly — browsers may clear storage if your device runs low on space. Your API key is not included in backups for security.</p>
+  </div>`;
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+function exportBackup() {
+  const data = { version: 1, exported: new Date().toISOString(), receipts: receipts.map(r => ({ ...r, image: r.image ? '[photo]' : null })) };
+  const withPhotos = { ...data, receipts: receipts };
+  const blob = new Blob([JSON.stringify(withPhotos, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `receipttrack_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+async function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); } catch { alert('Invalid backup file.'); return; }
+  if (!data.receipts || !Array.isArray(data.receipts)) { alert('This does not appear to be a valid ReceiptTrack backup.'); return; }
+  if (!confirm(`Import ${data.receipts.length} receipts? This will MERGE with your existing ${receipts.length} receipts (no duplicates).`)) return;
+  const existingIds = new Set(receipts.map(r => r.id));
+  const newOnes = data.receipts.filter(r => !existingIds.has(r.id));
+  receipts = [...receipts, ...newOnes].sort((a,b) => new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  await saveReceipts();
+  document.querySelector('.modal-overlay')?.remove();
+  render();
+  alert(`✓ Imported ${newOnes.length} new receipts.`);
+  e.target.value = '';
+}
+
+// ── Excel Export ───────────────────────────────────────────────────
 function exportToExcel() {
   if (!receipts.length) { alert('No receipts to export yet.'); return; }
-  const rows = receipts.map(r => ({ Date: r.date||'', Store: r.store||'', Amount: parseFloat(r.amount||0), Category: r.category||'', Notes: r.notes||'', 'Has Photo': r.image?'Yes':'No', Added: new Date(r.createdAt).toLocaleDateString() }));
-  rows.push({}, { Date:'', Store:'GRAND TOTAL', Amount: parseFloat(total(receipts).toFixed(2)), Category:'', Notes:'', 'Has Photo':'', Added:'' });
+  const rows = receipts.map(r => ({ Date:r.date||'', Store:r.store||'', Amount:parseFloat(r.amount||0), Category:r.category||'', Notes:r.notes||'', 'Has Photo':r.image?'Yes':'No', Added:new Date(r.createdAt).toLocaleDateString() }));
+  rows.push({}, { Date:'', Store:'GRAND TOTAL', Amount:parseFloat(total(receipts).toFixed(2)), Category:'', Notes:'', 'Has Photo':'', Added:'' });
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [12,26,12,14,26,10,14].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
@@ -484,14 +600,14 @@ function exportToExcel() {
   CATEGORIES.forEach(cat => {
     const cr = receipts.filter(r=>r.category===cat).map(r=>({ Date:r.date||'', Store:r.store||'', Amount:parseFloat(r.amount||0), Notes:r.notes||'' }));
     if (cr.length) {
-      cr.push({}, { Date:'', Store:'TOTAL', Amount: parseFloat(total(receipts.filter(r=>r.category===cat)).toFixed(2)), Notes:'' });
+      cr.push({}, { Date:'', Store:'TOTAL', Amount:parseFloat(total(receipts.filter(r=>r.category===cat)).toFixed(2)), Notes:'' });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cr), cat);
     }
   });
   XLSX.writeFile(wb, `ReceiptTrack_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-render();
+init();
 </script>
 </body>
 </html>
