@@ -504,11 +504,58 @@ function viewReceipt(id) {
     <div class="mrow"><span class="mlabel">Category</span><span class="mval"><span class="badge ${r.category}">${r.category}</span></span></div>
     ${r.notes?`<div class="mrow"><span class="mlabel">Notes</span><span class="mval">${esc(r.notes)}</span></div>`:''}
     <div class="mrow"><span class="mlabel">Added</span><span class="mval">${new Date(r.createdAt).toLocaleDateString()}</span></div>
-    <button class="btn btn-d btn-full" style="margin-top:13px" onclick="doDelete('${r.id}',this)">Delete Receipt</button>
+    <div style="display:flex;gap:10px;margin-top:13px">
+      <button class="btn btn-s" style="flex:1" onclick="this.closest('.overlay').remove();editReceipt('${r.id}')">✏️ Edit</button>
+      <button class="btn btn-d" style="flex:1" onclick="doDelete('${r.id}',this)">Delete</button>
+    </div>
   </div>`;
   ov.onclick=e=>{if(e.target===ov)ov.remove();};
   document.body.appendChild(ov);
 }
+
+function editReceipt(id) {
+  const r=receipts.find(x=>x.id===id); if(!r) return;
+  const ov=document.createElement('div'); ov.className='overlay';
+  ov.innerHTML=`<div class="modal">
+    <div class="mhead"><div class="mtitle">✏️ Edit Receipt</div><button class="mclose" onclick="this.closest('.overlay').remove()">✕</button></div>
+    ${r.image?`<img class="mimg" src="${r.image}" alt="Receipt">`:''}
+    <div class="fg"><label class="fl">Establishment / Store</label>
+      <input class="fi" id="e-store" type="text" value="${eA(r.store||'')}" placeholder="e.g. Chevron, Home Depot" autocomplete="organization"></div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Date</label>
+        <input class="fi" id="e-date" type="date" value="${r.date||''}"></div>
+      <div class="fg"><label class="fl">Amount ($)</label>
+        <input class="fi" id="e-amount" type="number" step="0.01" min="0" placeholder="0.00" value="${r.amount||''}" inputmode="decimal"></div>
+    </div>
+    <div class="fg"><label class="fl">Category</label>
+      <select class="fsel" id="e-category">
+        ${CATS.map(c=>`<option${r.category===c?' selected':''}>${c}</option>`).join('')}
+      </select></div>
+    <div class="fg"><label class="fl">Notes (optional)</label>
+      <input class="fi" id="e-notes" type="text" placeholder="e.g. Job site #42" value="${eA(r.notes||'')}"></div>
+    <button class="btn btn-p btn-full" style="padding:13px;font-size:15px;margin-top:4px" onclick="saveEdit('${r.id}',this)">💾 Save Changes</button>
+    <button class="btn btn-d btn-full" style="margin-top:10px" onclick="doDelete('${r.id}',this)">Delete Receipt</button>
+  </div>`;
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  document.body.appendChild(ov);
+}
+
+async function saveEdit(id, btn) {
+  const store    = document.getElementById('e-store')?.value?.trim();
+  const date     = document.getElementById('e-date')?.value;
+  const amount   = document.getElementById('e-amount')?.value;
+  const category = document.getElementById('e-category')?.value;
+  const notes    = document.getElementById('e-notes')?.value?.trim();
+  if(!amount||isNaN(parseFloat(amount))){alert('Please enter a valid amount.');return;}
+  const idx=receipts.findIndex(r=>r.id===id);
+  if(idx===-1) return;
+  receipts[idx]={...receipts[idx],store:store||'',date,amount:parseFloat(amount),category,notes,updatedAt:new Date().toISOString()};
+  try { await dbPut('receipts', receipts[idx]); } catch(e) { lsFallback(); }
+  lsBak();
+  btn.closest('.overlay').remove();
+  render();
+}
+
 async function doDelete(id,btn) {
   if(!confirm('Delete this receipt?')) return;
   await removeReceipt(id);
@@ -554,7 +601,8 @@ function showBackup() {
   const ov=document.createElement('div'); ov.className='overlay';
   ov.innerHTML=`<div class="modal">
     <div class="mhead"><div class="mtitle">☁ Backup & Restore</div><button class="mclose" onclick="this.closest('.overlay').remove()">✕</button></div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:13px">Export a backup to keep a copy or move data to another device. Your API key is not included in backups.</p>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:13px">Export a full backup including all receipt photos. Use this to keep a copy or transfer to another device. Your API key is not included in backups.</p>
+    <div class="sb warn" style="margin-bottom:13px"><span>💡</span><div style="font-size:12px">Backups include photos so file size may be large. Save to iCloud Drive, Google Drive, or email to yourself.</div></div>
     <div class="bkrow">
       <button class="btn btn-s" onclick="doExport()">⬇ Export Backup</button>
       <button class="btn btn-s" onclick="document.getElementById('import-input').click()">⬆ Import Backup</button>
@@ -565,17 +613,83 @@ function showBackup() {
   ov.onclick=e=>{if(e.target===ov)ov.remove();};
   document.body.appendChild(ov);
 }
-function doExport() {
-  const blob=new Blob([JSON.stringify({version:2,exported:new Date().toISOString(),receipts},null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download=`receipttrack_${new Date().toISOString().slice(0,10)}.json`;
-  a.click(); URL.revokeObjectURL(url);
+async function compressImage(dataUrl, maxWidth=1200, quality=0.7) {
+  if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function doExport() {
+  // Show progress modal
+  const prog = document.createElement('div');
+  prog.className = 'overlay';
+  prog.innerHTML = `<div class="modal" style="text-align:center;padding:30px 20px">
+    <div class="spinner" style="margin:0 auto 14px"></div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">Preparing Backup</div>
+    <div id="prog-msg" style="font-size:13px;color:var(--text2)">Compressing images…</div>
+    <div style="margin-top:12px;background:var(--surface2);border-radius:4px;height:6px;overflow:hidden">
+      <div id="prog-bar" style="height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width 0.2s"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(prog);
+
+  const compressed = [];
+  for (let i = 0; i < receipts.length; i++) {
+    const r = receipts[i];
+    const pct = Math.round((i / receipts.length) * 100);
+    const msg = document.getElementById('prog-msg');
+    const bar = document.getElementById('prog-bar');
+    if (msg) msg.textContent = `Compressing ${i+1} of ${receipts.length}…`;
+    if (bar) bar.style.width = pct + '%';
+    // Small yield to keep UI responsive
+    await new Promise(r => setTimeout(r, 0));
+    const compressedImage = r.image ? await compressImage(r.image) : null;
+    compressed.push({...r, image: compressedImage});
+  }
+
+  if (document.getElementById('prog-bar')) document.getElementById('prog-bar').style.width = '100%';
+  if (document.getElementById('prog-msg')) document.getElementById('prog-msg').textContent = 'Building backup file…';
+  await new Promise(r => setTimeout(r, 100));
+
+  const data = {
+    version: 3,
+    exported: new Date().toISOString(),
+    receiptCount: compressed.length,
+    receipts: compressed
+  };
+  const json = JSON.stringify(data, null, 2);
+  const sizeMB = (new Blob([json]).size / 1024 / 1024).toFixed(1);
+
+  prog.remove();
+
+  const blob = new Blob([json], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `receipttrack_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  alert(`✓ Backup saved (${sizeMB} MB, ${compressed.length} receipts)`);
 }
 async function onImport(e) {
   const file=e.target.files[0]; if(!file) return;
   let data; try{data=JSON.parse(await file.text());}catch{alert('Invalid backup file.');return;}
   if(!data.receipts||!Array.isArray(data.receipts)){alert('Not a valid ReceiptTrack backup.');return;}
-  if(!confirm(`Import ${data.receipts.length} receipts? New ones will be merged with your existing ${receipts.length}.`)) return;
+  const hasPhotos = data.receipts.filter(r=>r.image).length;
+  const photoNote = hasPhotos ? `\n(includes ${hasPhotos} receipt photo${hasPhotos!==1?'s':''})` : '';
+  if(!confirm(`Import ${data.receipts.length} receipts?${photoNote}\nNew ones will be merged with your existing ${receipts.length}.`)) return;
   const existing=new Set(receipts.map(r=>r.id));
   const newOnes=data.receipts.filter(r=>!existing.has(r.id));
   for(const r of newOnes){try{await dbPut('receipts',r);}catch(e){}}
