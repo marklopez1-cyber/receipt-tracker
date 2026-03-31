@@ -424,8 +424,14 @@ async function scanWithAI() {
 1. store_name: the business or store name
 2. date: transaction date in YYYY-MM-DD format
 3. total: the final total as a plain number (no $ or commas)
+4. category: classify the purchase into exactly one of these categories:
+   - "Fuel" — gas stations, fuel, diesel, petrol, electric vehicle charging
+   - "Supplies" — office supplies, cleaning supplies, consumables, hardware stores, general merchandise
+   - "Equipment" — tools, machinery, electronics, equipment purchases or rentals
+   - "Meals" — restaurants, cafes, fast food, catering, coffee shops, food delivery
+   - "Other" — anything that does not clearly fit the above
 Respond ONLY with raw JSON, no markdown, no extra text:
-{"store_name":"","date":"","total":""}`}
+{"store_name":"","date":"","total":"","category":""}`}
         ]}]
       })
     });
@@ -441,10 +447,12 @@ Respond ONLY with raw JSON, no markdown, no extra text:
     let parsed;
     try{parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());}
     catch{scanStatus={type:'error',msg:`Could not parse response: "${raw.slice(0,80)}"`};render();return;}
+    const VALID_CATS=['Fuel','Supplies','Equipment','Meals','Other'];
     const filled=[];
     if(parsed.store_name){editForm.store=parsed.store_name;filled.push('store');}
     if(parsed.date&&/\d{4}-\d{2}-\d{2}/.test(parsed.date)){editForm.date=parsed.date;filled.push('date');}
     if(parsed.total&&!isNaN(parseFloat(parsed.total))){editForm.amount=parseFloat(parsed.total).toFixed(2);filled.push('amount');}
+    if(parsed.category&&VALID_CATS.includes(parsed.category)){editForm.category=parsed.category;filled.push('category');}
     scanStatus=filled.length
       ?{type:'success',msg:`✓ AI filled in: ${filled.join(', ')}. Review and save below.`}
       :{type:'warn',msg:'AI could not read clear data. Please fill in manually.'};
