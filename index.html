@@ -452,7 +452,15 @@ Respond ONLY with raw JSON, no markdown, no extra text:
     if(parsed.store_name){editForm.store=parsed.store_name;filled.push('store');}
     if(parsed.date&&/\d{4}-\d{2}-\d{2}/.test(parsed.date)){editForm.date=parsed.date;filled.push('date');}
     if(parsed.total&&!isNaN(parseFloat(parsed.total))){editForm.amount=parseFloat(parsed.total).toFixed(2);filled.push('amount');}
-    if(parsed.category&&VALID_CATS.includes(parsed.category)){editForm.category=parsed.category;filled.push('category');}
+    if(parsed.category&&VALID_CATS.includes(parsed.category)){
+      let cat=parsed.category;
+      // Business rule: equipment under $750 is classified as Supplies
+      if(cat==='Equipment'&&parsed.total&&parseFloat(parsed.total)<750){
+        cat='Supplies';
+      }
+      editForm.category=cat;
+      filled.push('category');
+    }
     scanStatus=filled.length
       ?{type:'success',msg:`✓ AI filled in: ${filled.join(', ')}. Review and save below.`}
       :{type:'warn',msg:'AI could not read clear data. Please fill in manually.'};
