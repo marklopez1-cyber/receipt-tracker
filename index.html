@@ -531,8 +531,9 @@ async function onAuthSuccess() {
   document.getElementById('app').classList.remove('hidden');
   await loadUserSubscription();
   await loadUserReceipts();
-  attachLogos(receipts).then(() => render());
   showTab('dashboard');
+  // Fetch logos in background after UI is shown
+  attachLogos(receipts);
 }
 
 function renderUserBar() {
@@ -664,12 +665,39 @@ function logoHtml(r, size=32) {
 }
 
 async function attachLogos(rList) {
-  for (const r of rList) {
-    if (r.store && !r.logoUrl) {
+  // Process in small batches to avoid blocking UI
+  // Re-fetch logo for ANY receipt missing a logoUrl regardless of whether it was scanned before
+  const missing = rList.filter(r => r.store && !r.logoUrl);
+  if (missing.length === 0) return;
+
+  for (const r of missing) {
+    try {
       const url = await fetchMerchantLogo(r.store);
-      if (url) { r.logoUrl = url; try { await dbPut('receipts', r); } catch(e){} }
-    }
+      if (url) {
+        r.logoUrl = url;
+        // Save to IndexedDB
+        try { await dbPut('receipts', r); } catch(e) {}
+        // Save to Supabase so it persists across devices
+        try { await saveReceiptToSupabase(r); } catch(e) {}
+        // Re-render so logo appears immediately as each one loads
+        render();
+      }
+    } catch(e) {}
+    // Small delay between fetches to avoid hammering APIs
+    await new Promise(res => setTimeout(res, 300));
   }
+}
+
+async function refreshAllLogos() {
+  // Force re-fetch logos for ALL receipts including ones that previously failed
+  const toRefresh = receipts.filter(r => r.store);
+  for (const r of toRefresh) {
+    // Clear cached result so it tries again
+    const key = r.store.trim().toLowerCase();
+    delete logoCache[key];
+    r.logoUrl = null;
+  }
+  await attachLogos(toRefresh);
 }
 
 // ── Init ───────────────────────────────────────────────────────────
