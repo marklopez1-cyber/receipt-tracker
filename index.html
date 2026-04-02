@@ -354,7 +354,23 @@ async function loadUserReceipts() {
     .select('*')
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false });
-  if (!error && data) receipts = data;
+  if (!error && data) {
+    receipts = data.map(row => ({
+      id:          row.id,
+      store:       row.store || '',
+      date:        row.date || '',
+      amount:      row.amount || 0,
+      tax:         row.tax,
+      category:    row.category || 'Other',
+      paymentType: row.payment_type || '',
+      cardLast4:   row.card_last4 || '',
+      cardType:    row.card_type || '',
+      notes:       row.notes || '',
+      logoUrl:     row.logo_url || null,
+      image:       row.image || null,
+      createdAt:   row.created_at,
+    }));
+  }
 }
 
 async function saveReceiptToSupabase(r) {
@@ -893,6 +909,55 @@ function renderTierBar() {
     + '</div>';
 }
 
+function showPaywall(msg) {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = '<div class="modal">'
+    + '<div class="mhead">'
+    + '<div class="mtitle">Upgrade Your Plan</div>'
+    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button>'
+    + '</div>'
+    + (msg ? '<div style="background:var(--surface2);border-radius:var(--rs);padding:11px 13px;font-size:13px;color:var(--text2);margin-bottom:14px">' + msg + '</div>' : '')
+
+    // Free → Pro
+    + '<div style="border:2px solid var(--accent);border-radius:var(--r);padding:14px;margin-bottom:12px;position:relative">'
+    + '<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--accent);color:white;font-size:10px;font-weight:700;padding:3px 16px;border-radius:20px;white-space:nowrap;letter-spacing:.5px">MOST POPULAR</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    + '<div style="font-size:16px;font-weight:700">Pro</div>'
+    + '<div style="font-size:14px;color:var(--text2)">$7.99 / month</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--text2);margin-bottom:14px">'
+    + '<div style="color:var(--accent);font-weight:600">✓ ' + TIERS.pro.scansPerMonth + ' AI scans / month</div>'
+    + '<div>✓ Unlimited receipt storage</div>'
+    + '<div>✓ Excel export &amp; Backup</div>'
+    + '</div>'
+    + '<button class="btn btn-p btn-full" style="padding:12px;font-size:14px" '
+    + 'onclick="simulateUpgrade(\'pro\',this)">Upgrade to Pro — $7.99/mo</button>'
+    + '</div>'
+
+    // Free → Business
+    + '<div style="border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:6px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    + '<div style="font-size:16px;font-weight:700">Business</div>'
+    + '<div style="font-size:14px;color:var(--text2)">$19.99 / month</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--text2);margin-bottom:14px">'
+    + '<div style="color:var(--accent);font-weight:600">✓ ' + TIERS.business.scansPerMonth + ' AI scans / month</div>'
+    + '<div>✓ Everything in Pro</div>'
+    + '<div>✓ Multi-user &amp; QuickBooks (coming soon)</div>'
+    + '</div>'
+    + '<button class="btn btn-s btn-full" style="padding:11px" '
+    + 'onclick="simulateUpgrade(\'business\',this)">Upgrade to Business — $19.99/mo</button>'
+    + '</div>'
+
+    + '<button class="btn btn-s btn-full" style="padding:10px;margin-top:4px" '
+    + 'onclick="this.closest(\'.overlay\').remove()">Maybe Later</button>'
+    + '</div>';
+
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
 function showUpgradeModal() {
   const ov = document.createElement('div');
   ov.className = 'overlay';
@@ -967,7 +1032,7 @@ async function simulateUpgrade(tier, btn) {
   const names={pro:'Pro ($7.99/mo)',business:'Business ($19.99/mo)'};
   if(confirm(`This will connect to your payment processor.\n\nPlan: ${names[tier]}\n\n[Demo mode: tap OK to simulate upgrade]`)){
     await setTier(tier);
-    btn.closest('.paywall-overlay').remove();
+    btn.closest('.overlay').remove();
     render();
     alert('✓ Upgraded to ' + TIERS[tier].name + '! All features unlocked.');
   }
@@ -1261,6 +1326,17 @@ async function doSave() {
   showTab('receipts');
 }
 function setFilter(f){currentFilter=f;render();}
+function zoomImage(src) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px';
+  const img = document.createElement('img');
+  img.src = src;
+  img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.6)';
+  ov.appendChild(img);
+  ov.onclick = () => ov.remove();
+  document.body.appendChild(ov);
+}
+
 function viewReceipt(id) {
   const r=receipts.find(x=>x.id===id); if(!r) return;
   const ov=document.createElement('div'); ov.className='overlay';
@@ -1272,7 +1348,7 @@ function viewReceipt(id) {
       </div>
       <button class="mclose" onclick="this.closest('.overlay').remove()">✕</button>
     </div>
-    ${r.image?`<img class="mimg" src="${r.image}" alt="Receipt">`:''}
+    ${r.image?`<img class="mimg" src="${r.image}" alt="Receipt" onclick="zoomImage(this.src)" style="cursor:zoom-in">`:''}
     <div class="mrow"><span class="mlabel">Total</span><span class="mval" style="color:var(--accent);font-size:20px">${fmt(r.amount)}</span></div>
     ${r.tax!=null&&r.tax!==''?`<div class="mrow"><span class="mlabel">Tax</span><span class="mval">${fmt(r.tax)}</span></div>`:''}
     <div class="mrow"><span class="mlabel">Date</span><span class="mval">${r.date||'—'}</span></div>
@@ -1294,7 +1370,7 @@ function editReceipt(id) {
   const ov=document.createElement('div'); ov.className='overlay';
   ov.innerHTML=`<div class="modal">
     <div class="mhead"><div class="mtitle">✏️ Edit Receipt</div><button class="mclose" onclick="this.closest('.overlay').remove()">✕</button></div>
-    ${r.image?`<img class="mimg" src="${r.image}" alt="Receipt">`:''}
+    ${r.image?`<img class="mimg" src="${r.image}" alt="Receipt" onclick="zoomImage(this.src)" style="cursor:zoom-in">`:''}
     <div class="fg"><label class="fl">Establishment / Store</label>
       <input class="fi" id="e-store" type="text" value="${eA(r.store||'')}" placeholder="e.g. Chevron, Home Depot" autocomplete="organization"></div>
     <div class="frow">
