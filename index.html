@@ -835,84 +835,61 @@ function showTab(tab) {
 const fmt = n=>'$'+parseFloat(n||0).toFixed(2);
 
 function renderTierBar() {
-  const tier = TIERS[userTier];
-  const pill = `<span class="tier-pill ${userTier}">${tier.name}</span>`;
-  if (userTier === 'free') {
-    const used = scansThisMonth, limit = tier.scansPerMonth;
-    const pct  = Math.min(100,(used/limit*100)).toFixed(0);
-    const cls  = used>=limit?'danger':used>=limit*0.7?'warn':'';
-    const recPct = Math.min(100,(receipts.length/tier.maxReceipts*100)).toFixed(0);
-    return `<div class="tier-bar" style="flex-direction:column;align-items:stretch;gap:6px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span class="tier-bar-label">Free Plan</span>
-        <div style="display:flex;gap:6px;align-items:center">
-          ${pill}
-          <button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="showPricing()">Upgrade ↗</button>
-        </div>
-      </div>
-      <div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>AI Scans</span><span>${used}/${limit} this month</span></div>
-        <div class="usage-bar-bg"><div class="usage-bar-fill ${cls}" style="width:${pct}%"></div></div>
-      </div>
-      <div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>Receipts</span><span>${receipts.length}/${tier.maxReceipts} stored</span></div>
-        <div class="usage-bar-bg"><div class="usage-bar-fill ${recPct>=90?'danger':recPct>=70?'warn':''}" style="width:${recPct}%"></div></div>
-      </div>
-    </div>`;
-  }
-  if (userTier === 'pro') {
-    const note = scansThisMonth >= SOFT_CAP ? `<div class="throttle-msg">⚡ ${scansThisMonth} scans this month — throttling active above ${SOFT_CAP}</div>` : '';
-    return `<div class="tier-bar"><span class="tier-bar-label">Pro Plan · ${scansThisMonth} scans this month</span>${pill}</div>${note}`;
-  }
-  return `<div class="tier-bar"><span class="tier-bar-label">Business Plan · ${scansThisMonth} scans this month</span>${pill}</div>`;
-}
+  const tier     = TIERS[userTier];
+  const tierName = tier.name;
+  const pill     = '<span class="tier-pill ' + userTier + '">' + tierName + '</span>';
 
-function showPaywall(reason='') {
-  const ov=document.createElement('div'); ov.className='paywall-overlay';
-  ov.innerHTML=`<div class="paywall-box">
-    <div class="paywall-hero">
-      <div style="font-size:36px;margin-bottom:10px">🧾</div>
-      <h2>Upgrade ReceiptTrack</h2>
-      <p>${reason || 'Upgrade for more AI scans, storage, and export features.'}</p>
-    </div>
-    <div class="paywall-plans">
-      <div class="plan-card recommended" onclick="simulateUpgrade('pro',this)">
-        <div class="plan-badge">Most Popular</div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <div class="plan-name">Pro</div>
-            <div class="plan-price">$7.99<span>/month</span></div>
-            <div style="font-size:11px;color:var(--text2);margin-top:2px">or $59.99/year — save 37%</div>
-          </div>
-        </div>
-        <div class="plan-features">
-          <div class="plan-feature">50 AI scans per month</div>
-          <div class="plan-feature">Unlimited receipt storage</div>
-          <div class="plan-feature">Excel export</div>
-          <div class="plan-feature">Backup & restore with photos</div>
-        </div>
-      </div>
-      <div class="plan-card" onclick="simulateUpgrade('business',this)">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <div class="plan-name">Business</div>
-            <div class="plan-price">$19.99<span>/month</span></div>
-          </div>
-        </div>
-        <div class="plan-features">
-          <div class="plan-feature">200 AI scans per month</div>
-          <div class="plan-feature">Multiple users</div>
-          <div class="plan-feature">QuickBooks export (coming soon)</div>
-          <div class="plan-feature">Priority support</div>
-        </div>
-      </div>
-    </div>
-    <div class="plan-cta">
-      <button class="btn btn-s btn-full" onclick="this.closest('.paywall-overlay').remove()">Maybe later</button>
-    </div>
-  </div>`;
-  ov.onclick=e=>{if(e.target===ov)ov.remove();};
-  document.body.appendChild(ov);
+  if (userTier === 'free') {
+    const used   = scansThisMonth, limit = tier.scansPerMonth;
+    const pct    = Math.min(100,(used/limit*100)).toFixed(0);
+    const cls    = used>=limit?'danger':used>=limit*0.7?'warn':'';
+    const recPct = Math.min(100,(receipts.length/tier.maxReceipts*100)).toFixed(0);
+    const recCls = recPct>=90?'danger':recPct>=70?'warn':'';
+    return '<div class="tier-bar" style="flex-direction:column;align-items:stretch;gap:6px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center">'
+      + '<span class="tier-bar-label">Free Plan</span>'
+      + '<div style="display:flex;gap:6px;align-items:center">'
+      + pill
+      + '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="showPricing()">Upgrade ↗</button>'
+      + '</div></div>'
+      + '<div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>AI Scans</span><span>' + used + '/' + limit + ' this month</span></div>'
+      + '<div class="usage-bar-bg"><div class="usage-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div></div>'
+      + '<div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>Receipts</span><span>' + receipts.length + '/' + tier.maxReceipts + ' stored</span></div>'
+      + '<div class="usage-bar-bg"><div class="usage-bar-fill ' + recCls + '" style="width:' + recPct + '%"></div></div></div>'
+      + '</div>';
+  }
+
+  if (userTier === 'pro') {
+    const used  = scansThisMonth, limit = TIERS.pro.scansPerMonth;
+    const pct   = Math.min(100,(used/limit*100)).toFixed(0);
+    const cls   = used>=limit?'danger':used>=limit*0.7?'warn':'';
+    const note  = scansThisMonth >= SOFT_CAP
+      ? '<div class="throttle-msg">⚡ ' + scansThisMonth + ' scans this month — throttling active above ' + SOFT_CAP + '</div>'
+      : '';
+    return '<div class="tier-bar" style="flex-direction:column;align-items:stretch;gap:6px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center">'
+      + '<span class="tier-bar-label">Pro Plan</span>'
+      + '<div style="display:flex;gap:6px;align-items:center">'
+      + pill
+      + '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="showUpgradeModal()">Upgrade to Business ↗</button>'
+      + '</div></div>'
+      + '<div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>AI Scans</span><span>' + used + '/' + limit + ' this month</span></div>'
+      + '<div class="usage-bar-bg"><div class="usage-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div></div>'
+      + '</div>' + note;
+  }
+
+  // Business tier
+  const bUsed = scansThisMonth, bLimit = TIERS.business.scansPerMonth;
+  const bPct  = Math.min(100,(bUsed/bLimit*100)).toFixed(0);
+  const bCls  = bUsed>=bLimit?'danger':bUsed>=bLimit*0.7?'warn':'';
+  return '<div class="tier-bar" style="flex-direction:column;align-items:stretch;gap:6px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center">'
+    + '<span class="tier-bar-label">Business Plan</span>'
+    + '<div style="display:flex;gap:6px;align-items:center">' + pill + '</div>'
+    + '</div>'
+    + '<div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>AI Scans</span><span>' + bUsed + '/' + bLimit + ' this month</span></div>'
+    + '<div class="usage-bar-bg"><div class="usage-bar-fill ' + bCls + '" style="width:' + bPct + '%"></div></div></div>'
+    + '</div>';
 }
 
 function showPricing() { showPaywall(); }
@@ -1329,6 +1306,8 @@ function showSettings() {
     { icon:'🔑', title:'API Key',          sub:'Manage Anthropic API key',           action:'showApiSetup()' },
     { icon:'☁',  title:'Backup & Restore', sub:'Export or import your receipts',     action:'showBackup()' },
     { icon:'⬇',  title:'Export to Excel',  sub:'Download all receipts as .xlsx',     action:'exportToExcel()' },
+    userTier === 'free' ? { icon:'⭐', title:'Upgrade Plan', sub:'View Pro & Business plans', action:'showPricing()' } : null,
+    userTier === 'pro'  ? { icon:'⭐', title:'Upgrade to Business', sub:'200 scans/mo, multi-user & more', action:'showUpgradeModal()' } : null,
     !isStandalone ? { icon:'📱', title:'Add to Home Screen',
       sub: isIOS ? 'Safari → Share → Add to Home Screen' : 'Browser menu → Add to Home Screen',
       action:'showInstallHelp()' } : null,
