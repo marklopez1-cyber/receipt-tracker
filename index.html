@@ -892,6 +892,69 @@ function renderTierBar() {
     + '</div>';
 }
 
+function showUpgradeModal() {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+
+  const proScans  = TIERS.pro.scansPerMonth;
+  const bizScans  = TIERS.business.scansPerMonth;
+  const extraCost = (19.99 - 7.99).toFixed(2);
+
+  ov.innerHTML = '<div class="modal">'
+
+    // Header
+    + '<div class="mhead">'
+    + '<div class="mtitle">Upgrade to Business</div>'
+    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button>'
+    + '</div>'
+
+    // Current plan box
+    + '<div style="background:var(--surface2);border-radius:var(--r);padding:13px;margin-bottom:10px">'
+    + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Current Plan</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    + '<div style="font-size:16px;font-weight:700">Pro</div>'
+    + '<div style="font-size:14px;color:var(--text2)">$7.99 / month</div>'
+    + '</div>'
+    + '<div style="font-size:12px;color:var(--text2)">'
+    + '✓ ' + proScans + ' AI scans/month &nbsp;·&nbsp; ✓ Unlimited receipts &nbsp;·&nbsp; ✓ Excel &amp; Backup'
+    + '</div>'
+    + '</div>'
+
+    // Arrow
+    + '<div style="text-align:center;font-size:18px;color:var(--text3);margin:6px 0">↓</div>'
+
+    // Business plan box
+    + '<div style="border:2px solid var(--accent);border-radius:var(--r);padding:14px;margin-bottom:14px;position:relative">'
+    + '<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--accent);color:white;font-size:10px;font-weight:700;padding:3px 16px;border-radius:20px;white-space:nowrap;letter-spacing:.5px">UPGRADE TO</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<div style="font-size:16px;font-weight:700">Business</div>'
+    + '<div style="font-size:14px;color:var(--text2)">$19.99 / month</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text2)">'
+    + '<div style="color:var(--accent);font-weight:600">✓ ' + bizScans + ' AI scans/month — ' + Math.round(bizScans/proScans) + '× more than Pro</div>'
+    + '<div>✓ Multiple users on one account</div>'
+    + '<div>✓ QuickBooks export (coming soon)</div>'
+    + '<div>✓ Priority support</div>'
+    + '<div>✓ Everything in Pro included</div>'
+    + '</div>'
+    + '</div>'
+
+    // Value callout
+    + '<div style="background:var(--accent-light);border-radius:var(--rs);padding:10px 13px;font-size:12px;color:var(--accent);margin-bottom:16px;line-height:1.6">'
+    + '💡 Just <strong>$' + extraCost + ' more/month</strong> gets you 4× the AI scans plus multi-user access and priority support.'
+    + '</div>'
+
+    // CTA buttons
+    + '<button class="btn btn-p btn-full" style="padding:13px;font-size:15px;margin-bottom:10px" '
+    + 'onclick="simulateUpgrade(\'business\',this)">Upgrade to Business — $19.99/mo</button>'
+    + '<button class="btn btn-s btn-full" style="padding:11px" '
+    + 'onclick="this.closest(\'.overlay\').remove()">Keep My Pro Plan</button>'
+    + '</div>';
+
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
 function showPricing() { showPaywall(); }
 
 async function simulateUpgrade(tier, btn) {
