@@ -593,21 +593,46 @@ async function fetchMerchantLogo(storeName) {
   const key = storeName.trim().toLowerCase();
   if (logoCache[key] !== undefined) return logoCache[key];
 
-  // Try to derive a domain from the store name
+  // Clean store name to derive a likely domain
   const cleaned = storeName.trim()
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/(inc|llc|ltd|corp|co|the|store|shop|market|gas|fuel|station)/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/(inc|llc|ltd|corp|co|the|store|shop|market|gas|fuel|station|restaurant|grill|cafe|diner)/g, '')
     .trim()
     .replace(/\s+/g, '');
 
   if (!cleaned) { logoCache[key] = null; return null; }
 
-  // Try multiple logo sources in order
+  // Known brand domain mappings for common merchants
+  const knownDomains = {
+    chevron: 'chevron.com', shell: 'shell.com', exxon: 'exxonmobil.com',
+    bp: 'bp.com', mobil: 'mobil.com', valero: 'valero.com', arco: 'arco.com',
+    homedepot: 'homedepot.com', lowes: 'lowes.com', walmart: 'walmart.com',
+    target: 'target.com', costco: 'costco.com', samsclub: 'samsclub.com',
+    amazon: 'amazon.com', bestbuy: 'bestbuy.com', staples: 'staples.com',
+    mcdonalds: 'mcdonalds.com', starbucks: 'starbucks.com', subway: 'subway.com',
+    chickfila: 'chick-fil-a.com', tacobell: 'tacobell.com', wendys: 'wendys.com',
+    burgerking: 'bk.com', pizzahut: 'pizzahut.com', dominos: 'dominos.com',
+    papajohns: 'papajohns.com', chipotle: 'chipotle.com', panera: 'panerabread.com',
+    dunkin: 'dunkindonuts.com', cracker: 'crackerbarrel.com',
+    autozone: 'autozone.com', oreilly: 'oreillyauto.com', napa: 'napaonline.com',
+    grainger: 'grainger.com', fastenal: 'fastenal.com', menards: 'menards.com',
+    tractorsupply: 'tractorsupply.com', acehardware: 'acehardware.com',
+    officedepot: 'officedepot.com', officemax: 'officemax.com',
+    uhaul: 'uhaul.com', ryder: 'ryder.com', penske: 'pensketruckleasing.com',
+    samsara: 'samsara.com', unitedrentals: 'ur.com', sunbelt: 'sunbeltrentals.com'
+  };
+
+  const domain = knownDomains[cleaned] || (cleaned + '.com');
+
+  // Try logo sources in priority order
   const sources = [
-    `https://logo.clearbit.com/${cleaned}.com`,
-    `https://logo.clearbit.com/${cleaned}.net`,
-    `https://logo.clearbit.com/${cleaned}.com?size=64`,
+    // Brandfetch CDN (reliable, no auth needed for common brands)
+    `https://logo.clearbit.com/${domain}`,
+    // Google favicon (high res, very reliable)
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+    // DuckDuckGo favicon (another reliable fallback)
+    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
   ];
 
   for (const url of sources) {
@@ -617,11 +642,6 @@ async function fetchMerchantLogo(storeName) {
     } catch(e) {}
   }
 
-  // Google favicon fallback (nearly always works)
-  const gUrl = `https://www.google.com/s2/favicons?domain=${cleaned}.com&sz=64`;
-  const gOk  = await testImage(gUrl);
-  if (gOk) { logoCache[key] = gUrl; return gUrl; }
-
   logoCache[key] = null;
   return null;
 }
@@ -629,10 +649,12 @@ async function fetchMerchantLogo(storeName) {
 function testImage(url) {
   return new Promise(resolve => {
     const img = new Image();
-    img.onload  = () => resolve(img.width > 2); // favicon fallback returns 16px even for unknowns, filter out blanks
+    img.crossOrigin = 'anonymous';
+    img.onload  = () => resolve(img.width > 4 && img.height > 4);
     img.onerror = () => resolve(false);
     img.src = url;
-    setTimeout(() => resolve(false), 3000); // timeout
+    // 4 second timeout
+    setTimeout(() => resolve(false), 4000);
   });
 }
 
@@ -818,7 +840,7 @@ function showPaywall(reason='') {
     <div class="paywall-hero">
       <div style="font-size:36px;margin-bottom:10px">🧾</div>
       <h2>Upgrade ReceiptTrack</h2>
-      <p>${reason || 'Unlock unlimited scans, storage, and export features.'}</p>
+      <p>${reason || 'Upgrade for more AI scans, storage, and export features.'}</p>
     </div>
     <div class="paywall-plans">
       <div class="plan-card recommended" onclick="simulateUpgrade('pro',this)">
