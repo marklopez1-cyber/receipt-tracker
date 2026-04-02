@@ -169,6 +169,19 @@
   .user-bar { background:var(--surface2); border-radius:var(--rs); padding:8px 12px; display:flex; justify-content:space-between; align-items:center; margin-bottom:13px; font-size:12px; }
   .user-bar-email { color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .user-bar-signout { color:var(--danger); font-weight:600; cursor:pointer; flex-shrink:0; margin-left:10px; }
+  /* ── Settings Menu ───────────────────────────────────────────── */
+  .settings-item { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+  .settings-item:last-child { border-bottom:none; }
+  .settings-item:active { opacity:.7; }
+  .settings-icon { font-size:18px; width:32px; text-align:center; flex-shrink:0; }
+  .settings-label { flex:1; margin-left:12px; }
+  .settings-label-title { font-size:15px; font-weight:600; }
+  .settings-label-sub { font-size:12px; color:var(--text2); margin-top:2px; }
+  .settings-arrow { color:var(--text3); font-size:14px; }
+  .settings-user { background:var(--surface2); border-radius:var(--r); padding:14px; margin-bottom:14px; }
+  .settings-user-email { font-size:13px; font-weight:600; color:var(--text); word-break:break-all; }
+  .settings-user-id { font-size:10px; color:var(--text3); margin-top:4px; font-family:monospace; word-break:break-all; }
+  .settings-user-tier { display:inline-block; margin-top:6px; }
   .hidden { display:none; }
   .install-banner { background:#1a3d17; color:white; padding:10px 14px; font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .install-banner button { background:white; color:var(--accent); border:none; border-radius:5px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; flex-shrink:0; }
@@ -176,17 +189,12 @@
 </head>
 <body>
 <div class="app" id="app">
-  <div id="install-banner" class="install-banner hidden">
-    <span>📱 Add to Home Screen for persistent storage</span>
-    <button onclick="showInstallHelp()">How?</button>
-  </div>
+
   <div class="header">
     <div class="header-top">
       <div class="logo">ReceiptTrack <small>Expense Manager</small></div>
       <div class="hbtns">
-        <button class="hbtn" onclick="showApiSetup()">⚙ API</button>
-        <button class="hbtn" onclick="showBackup()">☁ Backup</button>
-        <button class="hbtn" onclick="exportToExcel()">⬇ Excel</button>
+        <button class="hbtn" onclick="showSettings()">⚙ Settings</button>
       </div>
     </div>
   </div>
@@ -739,9 +747,6 @@ async function init() {
 
   // Check Supabase auth session
   const user = await getSession();
-  const isStandalone = window.matchMedia('(display-mode:standalone)').matches || navigator.standalone;
-  if (!isStandalone) document.getElementById('install-banner').classList.remove('hidden');
-
   if (!user) {
     document.getElementById('app').classList.add('hidden');
     showAuthScreen('login');
@@ -951,7 +956,6 @@ function renderDash() {
   const max=Math.max(...Object.values(ct),1);
   const rec=[...receipts].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,5);
   return `
-  ${renderUserBar()}
   ${renderTierBar()}
   ${!apiKey?`<div class="sb warn"><span>⚙</span><div>AI scanning inactive — tap <strong>⚙ API</strong> to add your Anthropic API key.</div></div>`:''}
   <div class="grid2">
@@ -1311,6 +1315,54 @@ async function doDelete(id,btn) {
 }
 
 // ── API Key ────────────────────────────────────────────────────────
+function showSettings() {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  const email    = currentUser?.email || 'Not signed in';
+  const uid      = currentUser?.id    || '—';
+  const tierName = TIERS[userTier]?.name || 'Free';
+  const tierPill = '<span class="tier-pill ' + userTier + '">' + tierName + '</span>';
+  const isIOS    = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode:standalone)').matches || navigator.standalone;
+
+  const items = [
+    { icon:'🔑', title:'API Key',          sub:'Manage Anthropic API key',           action:'showApiSetup()' },
+    { icon:'☁',  title:'Backup & Restore', sub:'Export or import your receipts',     action:'showBackup()' },
+    { icon:'⬇',  title:'Export to Excel',  sub:'Download all receipts as .xlsx',     action:'exportToExcel()' },
+    !isStandalone ? { icon:'📱', title:'Add to Home Screen',
+      sub: isIOS ? 'Safari → Share → Add to Home Screen' : 'Browser menu → Add to Home Screen',
+      action:'showInstallHelp()' } : null,
+    { icon:'🚪', title:'Sign Out', sub: email, action:'signOut()', danger:true },
+  ].filter(Boolean);
+
+  let itemsHtml = '';
+  items.forEach(function(item) {
+    const titleStyle = item.danger ? ' style="color:var(--danger)"' : '';
+    itemsHtml += '<div class="settings-item" onclick="this.closest(\'.overlay\').remove();' + item.action + '">'
+      + '<div class="settings-icon">' + item.icon + '</div>'
+      + '<div class="settings-label">'
+      + '<div class="settings-label-title"' + titleStyle + '>' + item.title + '</div>'
+      + '<div class="settings-label-sub">' + item.sub + '</div>'
+      + '</div>'
+      + '<div class="settings-arrow">›</div>'
+      + '</div>';
+  });
+
+  ov.innerHTML = '<div class="modal">'
+    + '<div class="mhead"><div class="mtitle">⚙ Settings</div>'
+    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
+    + '<div class="settings-user">'
+    + '<div class="settings-user-email">👤 ' + email + '</div>'
+    + '<div class="settings-user-id">ID: ' + uid + '</div>'
+    + '<div class="settings-user-tier">' + tierPill + '</div>'
+    + '</div>'
+    + itemsHtml
+    + '</div>';
+
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
 function showApiSetup() {
   const ov=document.createElement('div'); ov.className='overlay';
   ov.innerHTML=`<div class="modal">
