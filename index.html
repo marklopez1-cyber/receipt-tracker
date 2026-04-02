@@ -1489,16 +1489,32 @@ async function onImport(e) {
   let data; try{data=JSON.parse(await file.text());}catch{alert('Invalid backup file.');return;}
   if(!data.receipts||!Array.isArray(data.receipts)){alert('Not a valid ReceiptTrack backup.');return;}
   const hasPhotos = data.receipts.filter(r=>r.image).length;
-  const photoNote = hasPhotos ? `\n(includes ${hasPhotos} receipt photo${hasPhotos!==1?'s':''})` : '';
-  if(!confirm(`Import ${data.receipts.length} receipts?${photoNote}\nNew ones will be merged with your existing ${receipts.length}.`)) return;
+  const photoNote = hasPhotos ? '\n(includes ' + hasPhotos + ' receipt photo' + (hasPhotos!==1?'s':'') + ')' : '';
+  if(!confirm('Import ' + data.receipts.length + ' receipts?' + photoNote + '\nNew ones will be merged with your existing ' + receipts.length + '.')) return;
   const existing=new Set(receipts.map(r=>r.id));
   const newOnes=data.receipts.filter(r=>!existing.has(r.id));
-  for(const r of newOnes){try{await dbPut('receipts',r);}catch(e){}}
+
+  // Clear logoUrl from imported receipts so they get freshly fetched
+  // (backup logos may be stale URLs or missing)
+  newOnes.forEach(r => { r.logoUrl = null; });
+
+  // Save to IndexedDB and Supabase
+  for(const r of newOnes){
+    try { await dbPut('receipts', r); } catch(e) {}
+    try { await saveReceiptToSupabase(r); } catch(e) {}
+  }
+
   receipts=[...receipts,...newOnes].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
   lsBak();
-  document.querySelector('.overlay')?.remove(); render();
-  alert(`✓ Imported ${newOnes.length} new receipts.`);
+  document.querySelector('.overlay')?.remove();
+  render();
+  alert('✓ Imported ' + newOnes.length + ' new receipts.');
   e.target.value='';
+
+  // Fetch logos for all imported receipts in background
+  if (newOnes.length > 0) {
+    attachLogos(newOnes);
+  }
 }
 
 // ── Excel Export ───────────────────────────────────────────────────
