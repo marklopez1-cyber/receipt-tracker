@@ -602,58 +602,53 @@ async function fetchMerchantLogo(storeName) {
   const key = storeName.trim().toLowerCase();
   if (logoCache[key] !== undefined) return logoCache[key];
 
-  // Clean store name to derive a likely domain
+  // Clean store name to derive domain
   const cleaned = storeName.trim()
     .toLowerCase()
     .replace(/[^a-z0-9 ]/g, '')
-    .replace(/(inc|llc|ltd|corp|co|the|store|shop|market|gas|fuel|station|restaurant|grill|cafe|diner)/g, '')
+    .replace(/\b(inc|llc|ltd|corp|co|the|store|shop|market|gas|fuel|station|restaurant|grill|cafe|diner|express)\b/g, '')
     .trim()
     .replace(/\s+/g, '');
 
   if (!cleaned) { logoCache[key] = null; return null; }
 
-  // Known brand domain mappings for common merchants
+  // Known brand mappings
   const knownDomains = {
-    chevron: 'chevron.com', shell: 'shell.com', exxon: 'exxonmobil.com',
-    bp: 'bp.com', mobil: 'mobil.com', valero: 'valero.com', arco: 'arco.com',
-    homedepot: 'homedepot.com', lowes: 'lowes.com', walmart: 'walmart.com',
-    target: 'target.com', costco: 'costco.com', samsclub: 'samsclub.com',
-    amazon: 'amazon.com', bestbuy: 'bestbuy.com', staples: 'staples.com',
-    mcdonalds: 'mcdonalds.com', starbucks: 'starbucks.com', subway: 'subway.com',
-    chickfila: 'chick-fil-a.com', tacobell: 'tacobell.com', wendys: 'wendys.com',
-    burgerking: 'bk.com', pizzahut: 'pizzahut.com', dominos: 'dominos.com',
-    papajohns: 'papajohns.com', chipotle: 'chipotle.com', panera: 'panerabread.com',
-    dunkin: 'dunkindonuts.com', cracker: 'crackerbarrel.com',
-    autozone: 'autozone.com', oreilly: 'oreillyauto.com', napa: 'napaonline.com',
-    grainger: 'grainger.com', fastenal: 'fastenal.com', menards: 'menards.com',
-    tractorsupply: 'tractorsupply.com', acehardware: 'acehardware.com',
-    officedepot: 'officedepot.com', officemax: 'officemax.com',
-    uhaul: 'uhaul.com', ryder: 'ryder.com', penske: 'pensketruckleasing.com',
-    samsara: 'samsara.com', unitedrentals: 'ur.com', sunbelt: 'sunbeltrentals.com'
+    chevron:'chevron.com', shell:'shell.com', exxon:'exxonmobil.com',
+    bp:'bp.com', mobil:'mobil.com', valero:'valero.com', arco:'arco.com',
+    homedepot:'homedepot.com', lowes:'lowes.com', walmart:'walmart.com',
+    target:'target.com', costco:'costco.com', samsclub:'samsclub.com',
+    amazon:'amazon.com', bestbuy:'bestbuy.com', staples:'staples.com',
+    officedepot:'officedepot.com', officemax:'officemax.com',
+    mcdonalds:'mcdonalds.com', starbucks:'starbucks.com', subway:'subway.com',
+    chickfila:'chick-fil-a.com', tacobell:'tacobell.com', wendys:'wendys.com',
+    burgerking:'bk.com', pizzahut:'pizzahut.com', dominos:'dominos.com',
+    papajohns:'papajohns.com', chipotle:'chipotle.com', panera:'panerabread.com',
+    dunkin:'dunkindonuts.com', dunkindonuts:'dunkindonuts.com',
+    autozone:'autozone.com', oreilly:'oreillyauto.com', napa:'napaonline.com',
+    grainger:'grainger.com', fastenal:'fastenal.com', menards:'menards.com',
+    tractorsupply:'tractorsupply.com', acehardware:'acehardware.com',
+    uhaul:'uhaul.com', ryder:'ryder.com', penske:'pensketruckleasing.com',
+    unitedrentals:'ur.com', sunbelt:'sunbeltrentals.com',
+    kroger:'kroger.com', safeway:'safeway.com', publix:'publix.com',
+    wholefoodsmarket:'wholefoodsmarket.com', wholefoods:'wholefoodsmarket.com',
+    traderjoes:'traderjoes.com', aldi:'aldi.us', heb:'heb.com',
+    walgreens:'walgreens.com', cvs:'cvs.com', rite:'riteaid.com',
+    ups:'ups.com', fedex:'fedex.com', usps:'usps.com',
+    delta:'delta.com', southwest:'southwest.com', united:'united.com',
+    marriott:'marriott.com', hilton:'hilton.com', hyatt:'hyatt.com',
+    enterprise:'enterprise.com', hertz:'hertz.com', avis:'avis.com'
   };
 
   const domain = knownDomains[cleaned] || (cleaned + '.com');
 
-  // Try logo sources in priority order
-  const sources = [
-    // Brandfetch CDN (reliable, no auth needed for common brands)
-    `https://logo.clearbit.com/${domain}`,
-    // Google favicon (high res, very reliable)
-    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
-    // DuckDuckGo favicon (another reliable fallback)
-    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
-  ];
-
-  for (const url of sources) {
-    try {
-      const ok = await testImage(url);
-      if (ok) { logoCache[key] = url; return url; }
-    } catch(e) {}
-  }
-
-  logoCache[key] = null;
-  return null;
+  // Use Google favicon API — always returns an image, CORS-friendly from browsers
+  // sz=64 gives a good quality icon
+  const logoUrl = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=64';
+  logoCache[key] = logoUrl;
+  return logoUrl;
 }
+
 
 function testImage(url) {
   return new Promise(resolve => {
@@ -668,8 +663,14 @@ function testImage(url) {
 }
 
 function logoHtml(r, size=32) {
-  if (!r.logoUrl) return `<div style="width:${size}px;height:${size}px;border-radius:${size/4}px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:${size/2}px;flex-shrink:0">🏪</div>`;
-  return `<img src="${r.logoUrl}" style="width:${size}px;height:${size}px;border-radius:${size/4}px;object-fit:contain;background:white;border:1px solid var(--border);flex-shrink:0" onerror="this.style.display='none'">`;
+  var letter = (r.store || '?').trim()[0].toUpperCase();
+  var colors = ['#2d5a27','#185fa5','#6b3fa0','#c0392b','#d4750a'];
+  var color  = colors[letter.charCodeAt(0) % colors.length];
+  var sz = size, r4 = Math.round(size/4), sz2 = Math.round(size/2);
+  if (!r.logoUrl) {
+    return '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:' + r4 + 'px;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:' + sz2 + 'px;font-weight:700;color:white;flex-shrink:0;font-family:sans-serif">' + letter + '</div>';
+  }
+  return '<img data-logo="1" src="' + r.logoUrl + '" width="' + sz + '" height="' + sz + '" style="border-radius:' + r4 + 'px;object-fit:contain;background:white;border:1px solid var(--border);flex-shrink:0">';
 }
 
 async function attachLogos(rList) {
