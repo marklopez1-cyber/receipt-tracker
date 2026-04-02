@@ -1520,11 +1520,65 @@ function exportToExcel() {
 
 // ── Install Help ───────────────────────────────────────────────────
 function showInstallHelp() {
-  document.getElementById('install-banner').classList.add('hidden');
-  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  alert(isIOS
-    ?'On iPhone/iPad:\n1. Open this page in Safari (not Chrome)\n2. Tap the Share button (□ with arrow) at the bottom\n3. Scroll down and tap "Add to Home Screen"\n4. Tap "Add"\n\nOnce installed, your data will persist reliably.'
-    :'On Android:\n1. Tap the three-dot menu in Chrome\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+
+  const iosSteps = [
+    { icon:'🌐', text:'Open this page in <strong>Safari</strong> (not Chrome or other browsers)' },
+    { icon:'⬆', text:'Tap the <strong>Share button</strong> — the box with an arrow at the bottom of Safari' },
+    { icon:'📜', text:'Scroll down the share sheet and tap <strong>"Add to Home Screen"</strong>' },
+    { icon:'✅', text:'Tap <strong>"Add"</strong> in the top right corner' },
+    { icon:'🎉', text:'Open ReceiptTrack from your <strong>Home Screen</strong> — your data will now persist reliably' },
+  ];
+
+  const androidSteps = [
+    { icon:'⋮', text:'Tap the <strong>three-dot menu</strong> in the top right of Chrome' },
+    { icon:'📲', text:'Tap <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong>' },
+    { icon:'✅', text:'Tap <strong>"Add"</strong> to confirm' },
+    { icon:'🎉', text:'Open ReceiptTrack from your <strong>Home Screen</strong> for the best experience' },
+  ];
+
+  const desktopSteps = [
+    { icon:'🌐', text:'Open this page in <strong>Chrome</strong> or <strong>Edge</strong>' },
+    { icon:'📲', text:'Look for the <strong>install icon</strong> (⊕) in the address bar, or click the three-dot menu → <strong>"Install ReceiptTrack"</strong>' },
+    { icon:'✅', text:'Click <strong>"Install"</strong> to confirm' },
+    { icon:'🎉', text:'ReceiptTrack will open as a <strong>standalone app</strong> on your desktop' },
+  ];
+
+  const steps = isIOS ? iosSteps : isAndroid ? androidSteps : desktopSteps;
+  const platform = isIOS ? 'iPhone / iPad' : isAndroid ? 'Android' : 'Desktop';
+  const platformIcon = isIOS ? '🍎' : isAndroid ? '🤖' : '💻';
+
+  const stepsHtml = steps.map((s, i) =>
+    '<div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">'
+    + '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">' + s.icon + '</div>'
+    + '<div style="flex:1">'
+    + '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Step ' + (i+1) + '</div>'
+    + '<div style="font-size:14px;color:var(--text);line-height:1.5">' + s.text + '</div>'
+    + '</div>'
+    + '</div>'
+  ).join('');
+
+  ov.innerHTML = '<div class="modal">'
+    + '<div class="mhead">'
+    + '<div class="mtitle">' + platformIcon + ' Add to Home Screen</div>'
+    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button>'
+    + '</div>'
+    + '<div style="background:var(--accent-light);border-radius:var(--rs);padding:10px 13px;font-size:13px;color:var(--accent);margin-bottom:14px">'
+    + '📱 Instructions for <strong>' + platform + '</strong>. Adding to your home screen gives you app-like experience with persistent data storage.'
+    + '</div>'
+    + stepsHtml
+    + '<div style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--rs);font-size:12px;color:var(--text2);line-height:1.6">'
+    + '<strong>Why add to Home Screen?</strong><br>'
+    + 'When installed as an app, iOS and Android give ReceiptTrack protected storage that will not be cleared — unlike regular browser tabs which can lose data when storage runs low.'
+    + '</div>'
+    + '<button class="btn btn-p btn-full" style="margin-top:14px;padding:13px" onclick="this.closest(\'.overlay\').remove()">Got it!</button>'
+    + '</div>';
+
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
 }
 
 document.addEventListener("DOMContentLoaded", function() { init(); });
