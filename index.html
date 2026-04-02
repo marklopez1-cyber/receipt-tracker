@@ -416,6 +416,7 @@ function showAuthScreen(mode) {
     '      ' + (isLogin ? 'Sign In' : 'Create Account'),
     '    </button>',
     '    <div class="auth-switch">' + switchLine + '</div>',
+    isLogin ? '    <div style="text-align:center;margin-top:10px"><span style="font-size:13px;color:var(--info);cursor:pointer;text-decoration:underline" onclick="handleForgotPassword()">Forgot password?</span></div>' : '',
     '  </div>',
     '  <div class="auth-footer">',
     '    By continuing you agree to our Terms of Service.<br>',
@@ -428,6 +429,70 @@ function showAuthScreen(mode) {
   authEl.querySelectorAll('input').forEach(function(inp) {
     inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') handleAuth(mode); });
   });
+}
+
+function showPasswordResetScreen() {
+  let authEl = document.getElementById('auth-screen');
+  if (!authEl) {
+    authEl = document.createElement('div');
+    authEl.id = 'auth-screen';
+    document.body.insertBefore(authEl, document.getElementById('app'));
+  }
+  authEl.className = 'auth-screen';
+  authEl.innerHTML = [
+    '<div class="auth-box">',
+    '  <div class="auth-logo">',
+    '    <div class="auth-logo-icon">🧾</div>',
+    '    <div class="auth-logo-title">ReceiptTrack</div>',
+    '    <div class="auth-logo-sub">Choose a new password</div>',
+    '  </div>',
+    '  <div class="auth-card">',
+    '    <div class="auth-title">Reset Password</div>',
+    '    <div class="auth-sub">Enter your new password below</div>',
+    '    <div id="auth-error" class="auth-error hidden"></div>',
+    '    <div class="fg"><label class="fl">New Password</label>',
+    '      <input class="fi" id="new-password" type="password" placeholder="••••••••" autocomplete="new-password"></div>',
+    '    <div class="fg"><label class="fl">Confirm New Password</label>',
+    '      <input class="fi" id="confirm-password" type="password" placeholder="••••••••" autocomplete="new-password"></div>',
+    '    <button class="btn btn-p btn-full" style="padding:13px;font-size:15px;margin-top:4px" onclick="handlePasswordReset()">',
+    '      Set New Password',
+    '    </button>',
+    '  </div>',
+    '</div>'
+  ].join('\n');
+}
+
+async function handlePasswordReset() {
+  const newPass    = document.getElementById('new-password')?.value;
+  const confirmPass= document.getElementById('confirm-password')?.value;
+  if (!newPass || newPass.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
+  if (newPass !== confirmPass) { showAuthError('Passwords do not match.'); return; }
+  const btn = document.querySelector('#auth-screen .btn-p');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const { error } = await sb.auth.updateUser({ password: newPass });
+  if (error) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Set New Password'; }
+    showAuthError(error.message || 'Failed to update password. Please try again.');
+    return;
+  }
+  // Clear hash and go to login
+  window.location.hash = '';
+  await sb.auth.signOut();
+  const authEl = document.getElementById('auth-screen');
+  if (authEl) authEl.remove();
+  document.getElementById('app').classList.add('hidden');
+  showAuthScreen('login');
+  setTimeout(() => showAuthError('✓ Password updated! Please sign in with your new password.'), 100);
+}
+
+async function handleForgotPassword() {
+  const email = document.getElementById('auth-email')?.value?.trim();
+  if (!email) { showAuthError('Please enter your email address first.'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://receipts.appdepot.net'
+  });
+  if (error) { showAuthError(error.message); return; }
+  showAuthError('✓ Password reset email sent! Check your inbox.');
 }
 
 async function handleAuth(mode) {
@@ -587,7 +652,7 @@ async function attachLogos(rList) {
 
 // ── Init ───────────────────────────────────────────────────────────
 async function init() {
-  // Initialize Supabase client (SDK must be loaded by now since script is deferred)
+  // Initialize Supabase client
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   // Register service worker
@@ -604,17 +669,33 @@ async function init() {
     apiKey = localStorage.getItem('rt_apikey')||'';
   }
 
+  // Check if this is a password recovery redirect from email link
+  // Supabase puts #access_token=...&type=recovery in the URL hash
+  const hash = window.location.hash;
+  if (hash && hash.includes('type=recovery')) {
+    // Exchange the token so user is temporarily signed in for password reset
+    const { data, error } = await sb.auth.getSession();
+    document.getElementById('app').classList.add('hidden');
+    showPasswordResetScreen();
+    return;
+  }
+
+  // Check if this is an email confirmation redirect
+  if (hash && hash.includes('type=signup')) {
+    // Auto confirm and sign in
+    await sb.auth.getSession();
+    window.location.hash = '';
+  }
+
   // Check Supabase auth session
   const user = await getSession();
   const isStandalone = window.matchMedia('(display-mode:standalone)').matches || navigator.standalone;
   if (!isStandalone) document.getElementById('install-banner').classList.remove('hidden');
 
   if (!user) {
-    // Not logged in — show auth screen
     document.getElementById('app').classList.add('hidden');
     showAuthScreen('login');
   } else {
-    // Logged in — load data and show app
     await onAuthSuccess();
   }
 }
