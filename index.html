@@ -280,6 +280,8 @@ if ('serviceWorker' in navigator) {
 
 // ── Supabase ───────────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://ecmbporsbhoworqrxodc.supabase.co';
+const RESEND_KEY    = 're_NZUAVZpC_PeMrMsyJ4a6hpnGhow51UY9q';
+const APP_URL       = 'https://receipts.appdepot.net';
 const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjbWJwb3JzYmhvd29ycXJ4b2RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwOTkzNzMsImV4cCI6MjA5MDY3NTM3M30.cJyFcNSMnHZ9Cq9DMRGA2f-osYKms3U4MxmuDcYoHco';
 let sb = null;
 let currentUser = null;
@@ -476,15 +478,76 @@ async function inviteMember(email) {
   if (!email || !email.includes('@')) { alert('Please enter a valid email.'); return; }
   const existing = orgMembers.find(m => m.email === email);
   if (existing) { alert('This person is already in your team.'); return; }
+
+  // 1. Create invite row in Supabase
+  let memberId;
   try {
-    const { error } = await sb.from('org_members').insert({
+    const { data, error } = await sb.from('org_members').insert({
       org_id: currentOrg.id, email, role: 'member', status: 'invited',
       invited_by: currentUser.email, invited_at: new Date().toISOString()
-    });
+    }).select().single();
     if (error) throw error;
+    memberId = data.id;
+  } catch(e) {
+    alert('Error creating invite: ' + e.message);
+    return;
+  }
+
+  // 2. Send invite email via Resend
+  const inviteUrl  = APP_URL + '?invite_org=' + currentOrg.id;
+  const inviterName = currentUser.email;
+  const orgName    = currentOrg.name;
+
+  const emailHtml = `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+      <div style="background:#2d5a27;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
+        <div style="font-size:32px;margin-bottom:8px">🧾</div>
+        <div style="color:white;font-size:20px;font-weight:700">ReceiptTrack</div>
+      </div>
+      <h2 style="color:#1a1a1a;margin:0 0 12px">You've been invited to join a team</h2>
+      <p style="color:#555;line-height:1.6;margin:0 0 20px">
+        <strong>${inviterName}</strong> has invited you to join <strong>${orgName}</strong> on ReceiptTrack —
+        a shared workspace for tracking and managing team expenses.
+      </p>
+      <div style="background:#f7f6f2;border-radius:8px;padding:16px;margin-bottom:24px;font-size:14px;color:#555">
+        <div style="margin-bottom:6px">👥 <strong>Team:</strong> ${orgName}</div>
+        <div>📧 <strong>Invited by:</strong> ${inviterName}</div>
+      </div>
+      <a href="${inviteUrl}" style="display:block;background:#2d5a27;color:white;text-align:center;padding:14px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;margin-bottom:20px">
+        Accept Invitation →
+      </a>
+      <p style="color:#888;font-size:12px;text-align:center;line-height:1.6">
+        This link will take you to ReceiptTrack where you can sign up or log in to accept.<br>
+        If you weren't expecting this, you can safely ignore this email.
+      </p>
+    </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + RESEND_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'ReceiptTrack <invites@appdepot.net>',
+        to:   [email],
+        subject: inviterName + ' invited you to ' + orgName + ' on ReceiptTrack',
+        html: emailHtml
+      })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || result.name || 'Email failed');
+  } catch(e) {
+    // Invite row was created — warn but don't block
+    console.warn('Resend error:', e.message);
+    alert('Invite saved, but email could not be sent (' + e.message + ').\n\nShare this link manually:\n' + inviteUrl);
     await loadOrgMembers();
     return true;
-  } catch(e) { alert('Error sending invite: ' + e.message); }
+  }
+
+  await loadOrgMembers();
+  return true;
 }
 
 async function updateMemberRole(memberId, newRole) {
