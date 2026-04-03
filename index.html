@@ -471,13 +471,13 @@ async function createOrg(name) {
   } catch(e) { alert('Error creating team: ' + e.message); return null; }
 }
 
-function showInviteFallback(email, link) {
+function showInviteFallback(email, link, timedOut) {
   const ov = document.createElement('div'); ov.className = 'overlay';
   ov.innerHTML = '<div class="modal">'
     + '<div class="mhead"><div class="mtitle">📋 Share Invite Link</div>'
     + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
     + '<div style="background:var(--surface2);border-radius:var(--r);padding:13px;margin-bottom:14px;font-size:13px;color:var(--text2);line-height:1.6">'
-    + 'Invite saved for <strong>' + email + '</strong>.<br>Share this link with them directly:</div>'
+    + 'Invite saved for <strong>' + email + '</strong>.<br>' + (timedOut ? 'Email server is starting up — it may take a minute. ' : 'Email could not be sent. ') + 'Share this link directly in the meantime:</div>'
     + '<div style="background:#f0f9f0;border:1px solid var(--accent);border-radius:var(--rs);padding:11px 13px;font-size:12px;word-break:break-all;color:var(--accent);margin-bottom:14px">' + link + '</div>'
     + '<button class="btn btn-p btn-full" style="padding:12px" id="copy-invite-btn">📋 Copy Link</button>'
     + '<button class="btn btn-s btn-full" style="padding:10px;margin-top:8px" onclick="this.closest(\'.overlay\').remove();showOrgManagement()">Done</button>'
@@ -541,8 +541,10 @@ async function inviteMember(email) {
     </div>`;
 
   try {
-    // Call Cloudflare Worker relay (handles CORS for Resend API)
+    // Call Railway relay (handles CORS for Resend API)
     const fnUrl = 'https://receipt-invite-production.up.railway.app/send-invite';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
     const res = await fetch(fnUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -551,16 +553,18 @@ async function inviteMember(email) {
         orgId:        currentOrg.id,
         orgName:      currentOrg.name,
         inviterEmail: currentUser.email
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Email failed');
   } catch(e) {
-    console.warn('Email error:', e.message);
-    // Copy invite link to clipboard automatically
+    const isTimeout = e.name === 'AbortError';
+    console.warn('Email error:', isTimeout ? 'Request timed out' : e.message);
     try { await navigator.clipboard.writeText(inviteUrl); } catch(_) {}
     await loadOrgMembers();
-    showInviteFallback(email, inviteUrl);
+    showInviteFallback(email, inviteUrl, isTimeout);
     return true;
   }
 
