@@ -471,6 +471,27 @@ async function createOrg(name) {
   } catch(e) { alert('Error creating team: ' + e.message); return null; }
 }
 
+function showInviteFallback(email, link) {
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = '<div class="modal">'
+    + '<div class="mhead"><div class="mtitle">📋 Share Invite Link</div>'
+    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
+    + '<div style="background:var(--surface2);border-radius:var(--r);padding:13px;margin-bottom:14px;font-size:13px;color:var(--text2);line-height:1.6">'
+    + 'Invite saved for <strong>' + email + '</strong>.<br>Share this link with them directly:</div>'
+    + '<div style="background:#f0f9f0;border:1px solid var(--accent);border-radius:var(--rs);padding:11px 13px;font-size:12px;word-break:break-all;color:var(--accent);margin-bottom:14px">' + link + '</div>'
+    + '<button class="btn btn-p btn-full" style="padding:12px" id="copy-invite-btn">📋 Copy Link</button>'
+    + '<button class="btn btn-s btn-full" style="padding:10px;margin-top:8px" onclick="this.closest(\'.overlay\').remove();showOrgManagement()">Done</button>'
+    + '</div>';
+  ov.onclick = e => { if (e.target === ov) { ov.remove(); showOrgManagement(); } };
+  document.body.appendChild(ov);
+  document.getElementById('copy-invite-btn').onclick = function() {
+    navigator.clipboard.writeText(link).then(() => {
+      this.textContent = '✓ Copied!';
+      setTimeout(() => { this.textContent = '📋 Copy Link'; }, 2000);
+    });
+  };
+}
+
 async function inviteMember(email) {
   if (!currentOrg || !isAdmin()) return;
   email = email.trim().toLowerCase();
@@ -520,14 +541,11 @@ async function inviteMember(email) {
     </div>`;
 
   try {
-    // Call Supabase Edge Function (avoids CORS restrictions on direct Resend API calls)
-    const fnUrl = SUPABASE_URL + '/functions/v1/send-invite';
+    // Call Cloudflare Worker relay (handles CORS for Resend API)
+    const fnUrl = 'https://receipt-invite-production.up.railway.app/send-invite';
     const res = await fetch(fnUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + SUPABASE_KEY
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email,
         orgId:        currentOrg.id,
@@ -539,8 +557,10 @@ async function inviteMember(email) {
     if (!res.ok) throw new Error(result.error || 'Email failed');
   } catch(e) {
     console.warn('Email error:', e.message);
-    alert('Invite saved, but email could not be sent (' + e.message + ').\n\nShare this link manually:\n' + inviteUrl);
+    // Copy invite link to clipboard automatically
+    try { await navigator.clipboard.writeText(inviteUrl); } catch(_) {}
     await loadOrgMembers();
+    showInviteFallback(email, inviteUrl);
     return true;
   }
 
