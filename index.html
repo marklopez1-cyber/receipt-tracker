@@ -616,6 +616,8 @@ async function doCreateOrg(btn) {
 
 function showOrgManagement() {
   if (!currentOrg) { showCreateOrgModal(); return; }
+  // Close any existing team overlays to prevent stacking
+  document.querySelectorAll('.overlay').forEach(o => o.remove());
   const canManage = isAdmin();
   const memberRows = orgMembers.map(m => {
     const isOwner = m.role === 'owner';
@@ -674,16 +676,20 @@ function showOrgManagement() {
 }
 
 async function doInvite(btn) {
-  const input = document.getElementById('invite-email');
-  if (!input) return;
+  // Find the input relative to this button's modal (handles stacked overlays)
+  const input = btn.closest('.modal')?.querySelector('#invite-email')
+             || btn.parentElement?.querySelector('input[type="email"]')
+             || document.getElementById('invite-email');
+  const email = (input?.value || '').trim();
+  if (!email || !email.includes('@')) { alert('Please enter a valid email.'); return; }
   btn.disabled = true; btn.textContent = 'Sending…';
-  const ok = await inviteMember(input.value);
+  const ok = await inviteMember(email);
   if (ok) {
-    input.value = '';
     btn.closest('.overlay').remove();
     showOrgManagement();
+  } else {
+    btn.disabled = false; btn.textContent = 'Send Invite';
   }
-  btn.disabled = false; btn.textContent = 'Send Invite';
 }
 
 async function toggleAdminView(btnOrNull) {
