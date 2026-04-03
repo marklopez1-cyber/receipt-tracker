@@ -517,109 +517,6 @@ async function acceptInvite(orgId) {
 
 
 
-// ── Demo Mode ─────────────────────────────────────────────────────────────
-// Simulates multi-user without real Supabase tables or email invites
-
-const DEMO_MEMBERS = [
-  { id:'dm1', email:'alice@demo.com',   role:'owner',  status:'active',  user_id:'u1', joined_at:'2025-01-10' },
-  { id:'dm2', email:'bob@demo.com',     role:'admin',  status:'active',  user_id:'u2', joined_at:'2025-02-14', invited_by:'alice@demo.com' },
-  { id:'dm3', email:'carol@demo.com',   role:'member', status:'active',  user_id:'u3', joined_at:'2025-03-01', invited_by:'alice@demo.com' },
-  { id:'dm4', email:'dave@demo.com',    role:'member', status:'invited', user_id:null, invited_at:'2025-04-20', invited_by:'alice@demo.com' },
-];
-
-const DEMO_EXTRA_RECEIPTS = [
-  { id:'dr1', store:'Shell', date:'2025-04-01', amount:62.40, tax:0, category:'Fuel',     paymentType:'Credit Card', cardType:'Visa',       cardLast4:'4242', notes:'',              submittedBy:'bob@demo.com',   createdAt:'2025-04-01T10:00:00Z' },
-  { id:'dr2', store:'Home Depot', date:'2025-04-03', amount:148.75, tax:12.30, category:'Supplies', paymentType:'Credit Card', cardType:'Mastercard', cardLast4:'5555', notes:'Job #12',       submittedBy:'bob@demo.com',   createdAt:'2025-04-03T14:22:00Z' },
-  { id:'dr3', store:'Starbucks', date:'2025-04-05', amount:24.80, tax:2.10, category:'Meals',    paymentType:'Debit Card',  cardType:'Visa',       cardLast4:'1234', notes:'Team meeting',  submittedBy:'carol@demo.com', createdAt:'2025-04-05T09:15:00Z' },
-  { id:'dr4', store:'AutoZone', date:'2025-04-07', amount:89.95, tax:7.40, category:'Supplies', paymentType:'Cash',        cardType:'',           cardLast4:'',     notes:'Truck #3',      submittedBy:'carol@demo.com', createdAt:'2025-04-07T16:00:00Z' },
-  { id:'dr5', store:'McDonald\'s', date:'2025-04-09', amount:31.20, tax:2.60, category:'Meals',    paymentType:'Credit Card', cardType:'Amex',       cardLast4:'9999', notes:'Crew lunch',    submittedBy:'bob@demo.com',   createdAt:'2025-04-09T12:30:00Z' },
-];
-
-let demoModeActive = false;
-let demoOwnReceipts = [];  // snapshot of user's real receipts before demo
-
-function showDemoMode() {
-  const ov = document.createElement('div'); ov.className = 'overlay';
-  ov.innerHTML = `<div class="modal">
-    <div class="mhead">
-      <div class="mtitle">🧪 Multi-User Demo</div>
-      <button class="mclose" onclick="this.closest('.overlay').remove()">✕</button>
-    </div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px">
-      This demo simulates a 4-person team without needing real accounts or email invites.
-      It temporarily loads fake team members and receipts so you can explore the admin experience.
-    </p>
-    <div style="background:var(--surface2);border-radius:var(--r);padding:13px;margin-bottom:16px;font-size:12px;color:var(--text2)">
-      <div style="font-weight:700;margin-bottom:8px;font-size:13px">Demo Team: "Acme Field Services"</div>
-      <div style="display:flex;flex-direction:column;gap:5px">
-        <div>👑 <strong>alice@demo.com</strong> — Owner (you)</div>
-        <div>🛡 <strong>bob@demo.com</strong> — Admin · 3 receipts</div>
-        <div>👤 <strong>carol@demo.com</strong> — Member · 2 receipts</div>
-        <div>✉️ <strong>dave@demo.com</strong> — Pending invite</div>
-      </div>
-    </div>
-    ${demoModeActive
-      ? `<button class="btn btn-d btn-full" style="padding:13px" onclick="stopDemo(this)">Stop Demo & Restore My Data</button>`
-      : `<button class="btn btn-p btn-full" style="padding:13px" onclick="startDemo(this)">▶ Start Demo</button>`}
-    <p style="font-size:11px;color:var(--text3);text-align:center;margin-top:10px">Your real receipts are saved and restored when you stop the demo.</p>
-  </div>`;
-  ov.onclick = e => { if (e.target === ov) ov.remove(); };
-  document.body.appendChild(ov);
-}
-
-async function startDemo(btn) {
-  btn.disabled = true; btn.textContent = 'Setting up…';
-
-  // 1. Upgrade to business silently
-  await setTier('business');
-
-  // 2. Save real receipts so we can restore later
-  demoOwnReceipts = [...receipts];
-
-  // 3. Activate demo org
-  currentOrg  = { id: 'demo-org-1', name: 'Acme Field Services', role: 'owner' };
-  orgMembers  = DEMO_MEMBERS;
-  adminViewAll = true;
-  demoModeActive = true;
-
-  // 4. Merge user's real receipts + demo team receipts
-  const myReceiptsTagged = demoOwnReceipts.map(r => ({ ...r, submittedBy: currentUser?.email || 'alice@demo.com', orgId: 'demo-org-1' }));
-  receipts = [...myReceiptsTagged, ...DEMO_EXTRA_RECEIPTS];
-
-  // 5. Show team tab
-  document.getElementById('tab-team')?.classList.remove('hidden');
-
-  btn.closest('.overlay').remove();
-  render();
-
-  // Show a quick hint
-  setTimeout(() => {
-    const hint = document.createElement('div');
-    hint.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:white;padding:10px 18px;border-radius:20px;font-size:13px;z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4)';
-    hint.textContent = '👥 Demo active — tap Team tab or check the dashboard!';
-    document.body.appendChild(hint);
-    setTimeout(() => hint.remove(), 4000);
-  }, 300);
-}
-
-async function stopDemo(btn) {
-  btn.disabled = true; btn.textContent = 'Restoring…';
-
-  // Restore everything
-  receipts     = demoOwnReceipts;
-  currentOrg   = null;
-  orgMembers   = [];
-  adminViewAll = false;
-  demoModeActive = false;
-  demoOwnReceipts = [];
-
-  // Restore tier from storage
-  await loadUserSubscription();
-
-  document.getElementById('tab-team')?.classList.add('hidden');
-  btn.closest('.overlay').remove();
-  render();
-}
 
 function showTeamPanel() {
   if (userTier !== 'business') { showPaywall('Team management is a Business feature.'); return; }
@@ -1808,7 +1705,6 @@ function showSettings() {
 
   const items = [
     { icon:'🔑', title:'API Key',          sub:'Manage Anthropic API key',           action:'showApiSetup()' },
-    { icon:'🧪', title:'Multi-User Demo',  sub: demoModeActive ? '🟢 Demo active — tap to stop' : 'Test team features without real accounts', action:'showDemoMode()' },
     { icon:'☁',  title:'Backup & Restore', sub:'Export or import your receipts',     action:'showBackup()' },
     { icon:'⬇',  title:'Export to Excel',  sub:'Download all receipts as .xlsx',     action:'exportToExcel()' },
     userTier === 'free' ? { icon:'⭐', title:'Upgrade Plan', sub:'View Pro & Business plans', action:'showPricing()' } : null,
