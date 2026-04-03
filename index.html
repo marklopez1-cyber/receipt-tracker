@@ -280,7 +280,6 @@ if ('serviceWorker' in navigator) {
 
 // ── Supabase ───────────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://ecmbporsbhoworqrxodc.supabase.co';
-const RESEND_KEY    = 're_NZUAVZpC_PeMrMsyJ4a6hpnGhow51UY9q';
 const APP_URL       = 'https://receipts.appdepot.net';
 const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjbWJwb3JzYmhvd29ycXJ4b2RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwOTkzNzMsImV4cCI6MjA5MDY3NTM3M30.cJyFcNSMnHZ9Cq9DMRGA2f-osYKms3U4MxmuDcYoHco';
 let sb = null;
@@ -494,9 +493,7 @@ async function inviteMember(email) {
   }
 
   // 2. Send invite email via Resend
-  const inviteUrl  = APP_URL + '?invite_org=' + currentOrg.id;
-  const inviterName = currentUser.email;
-  const orgName    = currentOrg.name;
+  const inviteUrl = APP_URL + '?invite_org=' + currentOrg.id;
 
   const emailHtml = `
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
@@ -523,24 +520,25 @@ async function inviteMember(email) {
     </div>`;
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
+    // Call Supabase Edge Function (avoids CORS restrictions on direct Resend API calls)
+    const fnUrl = SUPABASE_URL + '/functions/v1/send-invite';
+    const res = await fetch(fnUrl, {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + RESEND_KEY,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_KEY
       },
       body: JSON.stringify({
-        from: 'ReceiptTrack <invites@appdepot.net>',
-        to:   [email],
-        subject: inviterName + ' invited you to ' + orgName + ' on ReceiptTrack',
-        html: emailHtml
+        email,
+        orgId:        currentOrg.id,
+        orgName:      currentOrg.name,
+        inviterEmail: currentUser.email
       })
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.message || result.name || 'Email failed');
+    if (!res.ok) throw new Error(result.error || 'Email failed');
   } catch(e) {
-    // Invite row was created — warn but don't block
-    console.warn('Resend error:', e.message);
+    console.warn('Email error:', e.message);
     alert('Invite saved, but email could not be sent (' + e.message + ').\n\nShare this link manually:\n' + inviteUrl);
     await loadOrgMembers();
     return true;
