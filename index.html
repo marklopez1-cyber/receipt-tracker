@@ -201,6 +201,7 @@
   <div class="nav">
     <div class="ni active" onclick="showTab('dashboard')" id="tab-dashboard"><div class="ni-icon">◼</div>Dashboard</div>
     <div class="ni" onclick="showTab('receipts')" id="tab-receipts"><div class="ni-icon">☰</div>Receipts</div>
+    <div class="ni hidden" onclick="showTab('team')" id="tab-team"><div class="ni-icon">👥</div>Team</div>
     <div class="ni" onclick="showTab('scan')" id="tab-scan"><div class="ni-icon">+</div>Scan / Add</div>
   </div>
   <div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
@@ -349,28 +350,7 @@ async function syncScanCount() {
 }
 
 async function loadUserReceipts() {
-  if (!currentUser) return;
-  const { data, error } = await sb.from('receipts')
-    .select('*')
-    .eq('user_id', currentUser.id)
-    .order('created_at', { ascending: false });
-  if (!error && data) {
-    receipts = data.map(row => ({
-      id:          row.id,
-      store:       row.store || '',
-      date:        row.date || '',
-      amount:      row.amount || 0,
-      tax:         row.tax,
-      category:    row.category || 'Other',
-      paymentType: row.payment_type || '',
-      cardLast4:   row.card_last4 || '',
-      cardType:    row.card_type || '',
-      notes:       row.notes || '',
-      logoUrl:     row.logo_url || null,
-      image:       row.image || null,
-      createdAt:   row.created_at,
-    }));
-  }
+  await loadMyReceipts();
 }
 
 async function saveReceiptToSupabase(r) {
@@ -388,6 +368,8 @@ async function saveReceiptToSupabase(r) {
     card_type: r.cardType || '',
     notes: r.notes || '',
     logo_url: r.logoUrl || null,
+    org_id: currentOrg ? currentOrg.id : null,
+    submitted_by_email: currentUser.email || null,
     created_at: r.createdAt
   };
   await sb.from('receipts').upsert(row);
@@ -397,6 +379,509 @@ async function deleteReceiptFromSupabase(id) {
   if (!currentUser) return;
   await sb.from('receipts').delete().eq('id', id).eq('user_id', currentUser.id);
 }
+
+// ── Multi-User / Org Functions ─────────────────────────────────────────────
+
+async function loadOrg() {
+  if (!currentUser) return;
+  if (DEMO_MODE) return; // demo org set up by showDemoTeamSetup
+  try {
+    const { data: memberRows } = await sb.from('org_members')
+      .select('*, organizations(id,name,owner_id)')
+      .eq('user_id', currentUser.id).eq('status', 'active').limit(1);
+    if (memberRows && memberRows.length > 0) {
+      const m = memberRows[0], org = m.organizations;
+      currentOrg = { id: org.id, name: org.name, role: org.owner_id === currentUser.id ? 'owner' : m.role };
+    }
+    if (!currentOrg) {
+      const { data: ownedOrgs } = await sb.from('organizations')
+        .select('*').eq('owner_id', currentUser.id).limit(1);
+      if (ownedOrgs && ownedOrgs.length > 0)
+        currentOrg = { id: ownedOrgs[0].id, name: ownedOrgs[0].name, role: 'owner' };
+    }
+  } catch(e) {
+    // Tables may not exist yet — silently ignore
+    console.warn('loadOrg:', e.message);
+  }
+}
+
+function isAdmin() {
+  return currentOrg && (currentOrg.role === 'owner' || currentOrg.role === 'admin');
+}
+
+async function loadOrgMembers() {
+  if (!currentOrg) return;
+  if (DEMO_MODE) { orgMembers = _demoMembers; return; }
+  try {
+    const { data } = await sb.from('org_members').select('*')
+      .eq('org_id', currentOrg.id).order('joined_at', { ascending: true });
+    orgMembers = data || [];
+  } catch(e) { console.warn('loadOrgMembers:', e.message); }
+}
+
+async function loadOrgReceipts() {
+  if (!currentOrg || !isAdmin()) return;
+  if (DEMO_MODE) {
+    // In demo mode, generate fake receipts for each active member
+    const base = [..._demoBaseReceipts];
+    const fakeOrgReceipts = [];
+    _demoMembers.filter(m => m.status === 'active').forEach(m => {
+      const stores = ['Home Depot','Shell','Walmart','Starbucks','AutoZone'];
+      stores.slice(0, 2 + Math.floor(Math.random()*3)).forEach((store, i) => {
+        fakeOrgReceipts.push({
+          id: 'demo_' + m.id + '_' + i,
+          store, date: new Date(Date.now() - (i+1)*86400000*3).toISOString().slice(0,10),
+          amount: (Math.random()*200+10).toFixed(2),
+          tax: null, category: ['Fuel','Supplies','Meals'][i%3],
+          paymentType:'Credit Card', cardLast4:'', cardType:'Visa',
+          notes:'', logoUrl:null, image:null,
+          createdAt: new Date(Date.now() - (i+1)*86400000*3).toISOString(),
+          orgId: currentOrg.id, submittedBy: m.email,
+        });
+      });
+    });
+    // Also include own receipts tagged with submitter
+    const myTagged = base.map(r => ({...r, orgId: currentOrg.id, submittedBy: currentUser?.email}));
+    receipts = [...myTagged, ...fakeOrgReceipts].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return;
+  }
+  try {
+    const { data, error } = await sb.from('receipts').select('*')
+      .eq('org_id', currentOrg.id).order('created_at', { ascending: false });
+    if (!error && data) receipts = data.map(mapRow);
+  } catch(e) { console.warn('loadOrgReceipts:', e.message); }
+}
+
+async function loadMyReceipts() {
+  if (!currentUser) return;
+  const { data, error } = await sb.from('receipts')
+    .select('*')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false });
+  if (!error && data) receipts = data.map(mapRow);
+}
+
+function mapRow(row) {
+  return {
+    id:            row.id,
+    store:         row.store || '',
+    date:          row.date || '',
+    amount:        row.amount || 0,
+    tax:           row.tax,
+    category:      row.category || 'Other',
+    paymentType:   row.payment_type || '',
+    cardLast4:     row.card_last4 || '',
+    cardType:      row.card_type || '',
+    notes:         row.notes || '',
+    logoUrl:       row.logo_url || null,
+    image:         row.image || null,
+    createdAt:     row.created_at,
+    orgId:         row.org_id || null,
+    submittedBy:   row.submitted_by_email || null,
+  };
+}
+
+async function createOrg(name) {
+  if (!currentUser || !name.trim()) return null;
+  if (DEMO_MODE) {
+    const fakeOrg = { id: 'demo_org_' + Date.now(), name: name.trim() };
+    currentOrg = { id: fakeOrg.id, name: fakeOrg.name, role: 'owner' };
+    _demoMembers = [{
+      id: 'demo_m_owner', org_id: fakeOrg.id,
+      user_id: currentUser.id, email: currentUser.email,
+      role: 'owner', status: 'active', joined_at: new Date().toISOString(), invited_by: null
+    }];
+    orgMembers = _demoMembers;
+    return fakeOrg;
+  }
+  try {
+    const { data, error } = await sb.from('organizations')
+      .insert({ name: name.trim(), owner_id: currentUser.id }).select().single();
+    if (error) throw error;
+    await sb.from('org_members').insert({
+      org_id: data.id, user_id: currentUser.id, email: currentUser.email,
+      role: 'owner', status: 'active', joined_at: new Date().toISOString()
+    });
+    currentOrg = { id: data.id, name: data.name, role: 'owner' };
+    return data;
+  } catch(e) { alert('Error creating team: ' + e.message); return null; }
+}
+
+async function inviteMember(email) {
+  if (!currentOrg || !isAdmin()) return;
+  email = email.trim().toLowerCase();
+  if (!email || !email.includes('@')) { alert('Please enter a valid email.'); return; }
+  const existing = orgMembers.find(m => m.email === email);
+  if (existing) { alert('This person is already in your team.'); return; }
+  if (DEMO_MODE) {
+    const newMember = {
+      id: 'demo_m_' + Date.now(), org_id: currentOrg.id, user_id: null,
+      email, role: 'member', status: 'invited',
+      invited_by: currentUser.email, invited_at: new Date().toISOString(), joined_at: null
+    };
+    _demoMembers.push(newMember);
+    orgMembers = _demoMembers;
+    return true;
+  }
+  try {
+    const { error } = await sb.from('org_members').insert({
+      org_id: currentOrg.id, email, role: 'member', status: 'invited',
+      invited_by: currentUser.email, invited_at: new Date().toISOString()
+    });
+    if (error) throw error;
+    await loadOrgMembers();
+    return true;
+  } catch(e) { alert('Error sending invite: ' + e.message); }
+}
+
+async function updateMemberRole(memberId, newRole) {
+  if (!currentOrg || currentOrg.role !== 'owner') return;
+  if (DEMO_MODE) {
+    const m = _demoMembers.find(x => x.id === memberId);
+    if (m) m.role = newRole;
+    orgMembers = _demoMembers;
+    return;
+  }
+  await sb.from('org_members').update({ role: newRole }).eq('id', memberId);
+  await loadOrgMembers();
+}
+
+async function removeMember(memberId) {
+  if (!currentOrg || !isAdmin()) return;
+  const m = orgMembers.find(x => x.id === memberId);
+  if (m && m.role === 'owner') { alert("Can't remove the team owner."); return; }
+  if (!confirm('Remove this member from your team?')) return;
+  if (DEMO_MODE) {
+    _demoMembers = _demoMembers.filter(x => x.id !== memberId);
+    orgMembers = _demoMembers;
+    return;
+  }
+  await sb.from('org_members').delete().eq('id', memberId);
+  await loadOrgMembers();
+}
+
+async function acceptInvite(orgId) {
+  if (!currentUser || !orgId) return;
+  if (DEMO_MODE) return;
+  try {
+    const { data } = await sb.from('org_members').select('*')
+      .eq('org_id', orgId).eq('email', currentUser.email).eq('status', 'invited').single();
+    if (!data) return;
+    await sb.from('org_members').update({
+      user_id: currentUser.id, status: 'active', joined_at: new Date().toISOString()
+    }).eq('id', data.id);
+    await loadOrg();
+  } catch(e) { console.warn('acceptInvite:', e.message); }
+}
+
+// Demo helpers ───────────────────────────────────────────────────────────────
+let _demoBaseReceipts = []; // snapshot of real receipts before demo loads
+
+function demoActivateMember(memberId) {
+  // Simulate an invited member accepting — used in the UI
+  const m = _demoMembers.find(x => x.id === memberId);
+  if (!m || m.status === 'active') return;
+  m.status = 'active';
+  m.user_id = 'demo_user_' + memberId;
+  m.joined_at = new Date().toISOString();
+  orgMembers = _demoMembers;
+}
+
+async function showDemoTeamSetup() {
+  // Entry point: sets up demo mode, upgrades tier, creates fake org
+  DEMO_MODE = true;
+  if (userTier !== 'business') {
+    userTier = 'business';
+    await dbPut('settings', { key:'userTier', value:'business' });
+    document.getElementById('tab-team')?.classList.remove('hidden');
+  }
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal">
+    <div class="mhead">
+      <div class="mtitle">🧪 Demo: Team Setup</div>
+      <button class="mclose" onclick="this.closest('.overlay').remove()">✕</button>
+    </div>
+    <div style="background:var(--accent)11;border:1px solid var(--accent)33;border-radius:var(--r);padding:12px;font-size:12px;color:var(--accent);margin-bottom:16px;line-height:1.6">
+      <strong>Demo Mode</strong> — all team actions are simulated in memory.<br>No real emails sent · No Supabase tables needed · Resets on refresh.
+    </div>
+    <div class="fg"><label class="fl">Team Name</label>
+      <input class="fi" id="demo-org-name" value="Demo Company LLC" autocomplete="off"></div>
+    <div class="fg" style="margin-top:6px"><label class="fl">Pre-load fake team members?</label>
+      <select class="fsel" id="demo-member-count">
+        <option value="0">None — I'll add them manually</option>
+        <option value="2" selected>2 fake members</option>
+        <option value="4">4 fake members</option>
+      </select>
+    </div>
+    <button class="btn btn-p btn-full" style="margin-top:12px;padding:13px" onclick="doDemoSetup(this)">
+      🚀 Start Demo
+    </button>
+  </div>`;
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+async function doDemoSetup(btn) {
+  const name  = document.getElementById('demo-org-name')?.value || 'Demo Company LLC';
+  const count = parseInt(document.getElementById('demo-member-count')?.value || '2');
+  btn.disabled = true; btn.textContent = 'Setting up…';
+
+  // Snapshot current receipts as "my" receipts
+  _demoBaseReceipts = [...receipts];
+
+  // Create fake org
+  await createOrg(name);
+
+  // Pre-load fake members
+  const fakeEmails = [
+    'alice@demo.com','bob@demo.com','carol@demo.com','dave@demo.com'
+  ];
+  for (let i = 0; i < count; i++) {
+    await inviteMember(fakeEmails[i]);
+    // Immediately "accept" so they show as active
+    demoActivateMember(_demoMembers[_demoMembers.length - 1].id);
+  }
+
+  btn.closest('.overlay').remove();
+
+  // Show the management panel
+  showOrgManagement();
+}
+
+async function exitDemoMode() {
+  if (!confirm('Exit demo mode? This will reset your team data and return to your real account state.')) return;
+  DEMO_MODE = false;
+  currentOrg = null;
+  orgMembers = [];
+  _demoMembers = [];
+  _demoBaseReceipts = [];
+  adminViewAll = false;
+  await loadMyReceipts();
+  render();
+}
+
+
+// ── Demo Mode ─────────────────────────────────────────────────────────────
+// Simulates multi-user without real Supabase tables or email invites
+
+const DEMO_MEMBERS = [
+  { id:'dm1', email:'alice@demo.com',   role:'owner',  status:'active',  user_id:'u1', joined_at:'2025-01-10' },
+  { id:'dm2', email:'bob@demo.com',     role:'admin',  status:'active',  user_id:'u2', joined_at:'2025-02-14', invited_by:'alice@demo.com' },
+  { id:'dm3', email:'carol@demo.com',   role:'member', status:'active',  user_id:'u3', joined_at:'2025-03-01', invited_by:'alice@demo.com' },
+  { id:'dm4', email:'dave@demo.com',    role:'member', status:'invited', user_id:null, invited_at:'2025-04-20', invited_by:'alice@demo.com' },
+];
+
+const DEMO_EXTRA_RECEIPTS = [
+  { id:'dr1', store:'Shell', date:'2025-04-01', amount:62.40, tax:0, category:'Fuel',     paymentType:'Credit Card', cardType:'Visa',       cardLast4:'4242', notes:'',              submittedBy:'bob@demo.com',   createdAt:'2025-04-01T10:00:00Z' },
+  { id:'dr2', store:'Home Depot', date:'2025-04-03', amount:148.75, tax:12.30, category:'Supplies', paymentType:'Credit Card', cardType:'Mastercard', cardLast4:'5555', notes:'Job #12',       submittedBy:'bob@demo.com',   createdAt:'2025-04-03T14:22:00Z' },
+  { id:'dr3', store:'Starbucks', date:'2025-04-05', amount:24.80, tax:2.10, category:'Meals',    paymentType:'Debit Card',  cardType:'Visa',       cardLast4:'1234', notes:'Team meeting',  submittedBy:'carol@demo.com', createdAt:'2025-04-05T09:15:00Z' },
+  { id:'dr4', store:'AutoZone', date:'2025-04-07', amount:89.95, tax:7.40, category:'Supplies', paymentType:'Cash',        cardType:'',           cardLast4:'',     notes:'Truck #3',      submittedBy:'carol@demo.com', createdAt:'2025-04-07T16:00:00Z' },
+  { id:'dr5', store:'McDonald\'s', date:'2025-04-09', amount:31.20, tax:2.60, category:'Meals',    paymentType:'Credit Card', cardType:'Amex',       cardLast4:'9999', notes:'Crew lunch',    submittedBy:'bob@demo.com',   createdAt:'2025-04-09T12:30:00Z' },
+];
+
+let demoModeActive = false;
+let demoOwnReceipts = [];  // snapshot of user's real receipts before demo
+
+function showDemoMode() {
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal">
+    <div class="mhead">
+      <div class="mtitle">🧪 Multi-User Demo</div>
+      <button class="mclose" onclick="this.closest('.overlay').remove()">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+      This demo simulates a 4-person team without needing real accounts or email invites.
+      It temporarily loads fake team members and receipts so you can explore the admin experience.
+    </p>
+    <div style="background:var(--surface2);border-radius:var(--r);padding:13px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+      <div style="font-weight:700;margin-bottom:8px;font-size:13px">Demo Team: "Acme Field Services"</div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <div>👑 <strong>alice@demo.com</strong> — Owner (you)</div>
+        <div>🛡 <strong>bob@demo.com</strong> — Admin · 3 receipts</div>
+        <div>👤 <strong>carol@demo.com</strong> — Member · 2 receipts</div>
+        <div>✉️ <strong>dave@demo.com</strong> — Pending invite</div>
+      </div>
+    </div>
+    ${demoModeActive
+      ? `<button class="btn btn-d btn-full" style="padding:13px" onclick="stopDemo(this)">Stop Demo & Restore My Data</button>`
+      : `<button class="btn btn-p btn-full" style="padding:13px" onclick="startDemo(this)">▶ Start Demo</button>`}
+    <p style="font-size:11px;color:var(--text3);text-align:center;margin-top:10px">Your real receipts are saved and restored when you stop the demo.</p>
+  </div>`;
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+async function startDemo(btn) {
+  btn.disabled = true; btn.textContent = 'Setting up…';
+
+  // 1. Upgrade to business silently
+  await setTier('business');
+
+  // 2. Save real receipts so we can restore later
+  demoOwnReceipts = [...receipts];
+
+  // 3. Activate demo org
+  currentOrg  = { id: 'demo-org-1', name: 'Acme Field Services', role: 'owner' };
+  orgMembers  = DEMO_MEMBERS;
+  adminViewAll = true;
+  demoModeActive = true;
+
+  // 4. Merge user's real receipts + demo team receipts
+  const myReceiptsTagged = demoOwnReceipts.map(r => ({ ...r, submittedBy: currentUser?.email || 'alice@demo.com', orgId: 'demo-org-1' }));
+  receipts = [...myReceiptsTagged, ...DEMO_EXTRA_RECEIPTS];
+
+  // 5. Show team tab
+  document.getElementById('tab-team')?.classList.remove('hidden');
+
+  btn.closest('.overlay').remove();
+  render();
+
+  // Show a quick hint
+  setTimeout(() => {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:white;padding:10px 18px;border-radius:20px;font-size:13px;z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    hint.textContent = '👥 Demo active — tap Team tab or check the dashboard!';
+    document.body.appendChild(hint);
+    setTimeout(() => hint.remove(), 4000);
+  }, 300);
+}
+
+async function stopDemo(btn) {
+  btn.disabled = true; btn.textContent = 'Restoring…';
+
+  // Restore everything
+  receipts     = demoOwnReceipts;
+  currentOrg   = null;
+  orgMembers   = [];
+  adminViewAll = false;
+  demoModeActive = false;
+  demoOwnReceipts = [];
+
+  // Restore tier from storage
+  await loadUserSubscription();
+
+  document.getElementById('tab-team')?.classList.add('hidden');
+  btn.closest('.overlay').remove();
+  render();
+}
+
+function showTeamPanel() {
+  if (userTier !== 'business') { showPaywall('Team management is a Business feature.'); return; }
+  if (!currentOrg) { showCreateOrgModal(); return; }
+  showOrgManagement();
+}
+
+function showCreateOrgModal() {
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal">
+    <div class="mhead"><div class="mtitle">👥 Create Your Team</div>
+      <button class="mclose" onclick="this.closest('.overlay').remove()">✕</button></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Give your team a name. You'll be the owner and can invite members to submit receipts.</p>
+    <div class="fg"><label class="fl">Team Name</label>
+      <input class="fi" id="org-name-input" placeholder="e.g. Smith Plumbing, ACME Corp" autocomplete="organization"></div>
+    <button class="btn btn-p btn-full" style="margin-top:4px;padding:13px" onclick="doCreateOrg(this)">Create Team</button>
+  </div>`;
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+async function doCreateOrg(btn) {
+  const name = document.getElementById('org-name-input')?.value || '';
+  if (!name.trim()) { alert('Please enter a team name.'); return; }
+  btn.disabled = true; btn.textContent = 'Creating…';
+  const org = await createOrg(name);
+  if (org) {
+    btn.closest('.overlay').remove();
+    showOrgManagement();
+  } else {
+    btn.disabled = false; btn.textContent = 'Create Team';
+  }
+}
+
+function showOrgManagement() {
+  if (!currentOrg) { showCreateOrgModal(); return; }
+  const canManage = isAdmin();
+  const memberRows = orgMembers.map(m => {
+    const isOwner = m.role === 'owner';
+    const isSelf  = m.email === currentUser?.email;
+    const statusBadge = m.status === 'invited'
+      ? '<span style="background:#f59e0b22;color:#b45309;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600">INVITED</span>'
+      : '<span style="background:var(--accent)22;color:var(--accent);font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600">ACTIVE</span>';
+    const rolePill = `<span style="font-size:10px;font-weight:600;text-transform:uppercase;padding:2px 7px;border-radius:10px;background:${isOwner?'#6b3fa022;color:#6b3fa0':m.role==='admin'?'#185fa522;color:#185fa5':'var(--surface2);color:var(--text3)'}">${m.role}</span>`;
+    let actions = '';
+    if (canManage && !isOwner && !isSelf) {
+      actions = `<div style="display:flex;gap:6px;margin-top:8px">`;
+      if (currentOrg.role === 'owner') {
+        actions += m.role === 'admin'
+          ? `<button class="btn btn-s" style="font-size:11px;padding:4px 10px" onclick="updateMemberRole('${m.id}','member').then(()=>showOrgManagement())">Demote to Member</button>`
+          : `<button class="btn btn-s" style="font-size:11px;padding:4px 10px" onclick="updateMemberRole('${m.id}','admin').then(()=>showOrgManagement())">Make Admin</button>`;
+      }
+      actions += `<button class="btn btn-d" style="font-size:11px;padding:4px 10px" onclick="removeMember('${m.id}').then(()=>showOrgManagement())">Remove</button>`;
+      actions += `</div>`;
+    }
+    return `<div style="padding:12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.email}${isSelf?' (you)':''}</span>
+        ${statusBadge} ${rolePill}
+      </div>
+      ${m.status==='invited'?('<div style="font-size:11px;color:var(--text3);margin-top:4px">Invited by '+(m.invited_by||'admin')+'</div>'+(DEMO_MODE?'<button class="btn btn-s" style="font-size:11px;padding:4px 10px;margin-top:6px" onclick="demoActivateMember(\''+m.id+'\');loadOrgMembers().then(()=>showOrgManagement())">✓ Simulate Acceptance</button>':'')):''}
+      ${actions}
+    </div>`;
+  }).join('');
+
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal">
+    <div class="mhead">
+      <div class="mtitle">👥 ${currentOrg.name}</div>
+      <button class="mclose" onclick="this.closest('.overlay').remove()">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px;text-align:center">You are <strong>${currentOrg.role}</strong> · ${orgMembers.length} member${orgMembers.length!==1?'s':''}</div>
+
+    ${canManage ? `<div style="margin-bottom:16px">
+      <div class="fg"><label class="fl">Invite by Email</label>
+        <div style="display:flex;gap:8px">
+          <input class="fi" id="invite-email" type="email" placeholder="colleague@company.com" style="flex:1">
+          <button class="btn btn-p" style="padding:10px 14px;white-space:nowrap" onclick="doInvite(this)">Send Invite</button>
+        </div>
+      </div>
+    </div>` : ''}
+
+    <div class="sec" style="margin:0 0 10px">Members</div>
+    ${memberRows || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">No members yet</div>'}
+
+    ${isAdmin() ? `<button class="btn btn-s btn-full" style="margin-top:8px" onclick="toggleAdminView(this)">
+      ${adminViewAll ? '👤 Show My Receipts Only' : '👥 View All Team Receipts'}
+    </button>` : ''}
+  </div>`;
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+async function doInvite(btn) {
+  const input = document.getElementById('invite-email');
+  if (!input) return;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const ok = await inviteMember(input.value);
+  if (ok) {
+    input.value = '';
+    btn.closest('.overlay').remove();
+    showOrgManagement();
+  }
+  btn.disabled = false; btn.textContent = 'Send Invite';
+}
+
+async function toggleAdminView(btnOrNull) {
+  adminViewAll = !adminViewAll;
+  if (adminViewAll) {
+    await loadOrgReceipts();
+  } else {
+    await loadMyReceipts();
+  }
+  try { if (btnOrNull && btnOrNull.closest) btnOrNull.closest('.overlay')?.remove(); } catch(e) {}
+  render();
+}
+
+
 
 // ── Auth UI ────────────────────────────────────────────────────────
 function showAuthScreen(mode) {
@@ -554,10 +1039,17 @@ async function onAuthSuccess() {
   if (authEl) authEl.remove();
   document.getElementById('app').classList.remove('hidden');
   await loadUserSubscription();
-  await loadUserReceipts();
+  await loadOrg();
+  if (currentOrg) await loadOrgMembers();
+  // Check URL for pending invite acceptance
+  const urlParams = new URLSearchParams(window.location.search);
+  const inviteOrgId = urlParams.get('invite_org');
+  if (inviteOrgId) { await acceptInvite(inviteOrgId); history.replaceState({}, '', window.location.pathname); }
+  await loadMyReceipts();
   showTab('dashboard');
-  // Fetch logos in background after UI is shown
   attachLogos(receipts);
+  // Show team tab if business user in an org
+  if (userTier === 'business') document.getElementById('tab-team')?.classList.remove('hidden');
 }
 
 function renderUserBar() {
@@ -606,6 +1098,11 @@ let scanStatus=null;
 let userTier='free'; // 'free' | 'pro' | 'business'  — set from billing system
 let scansThisMonth=0;
 let lastScanTime=0;
+let currentOrg = null;    // {id, name, role:'owner'|'admin'|'member'}
+let orgMembers  = [];      // [{id,email,role,status,user_id,joined_at}]
+let adminViewAll = false;  // admin toggle: show all org receipts
+let DEMO_MODE = false;     // true when testing team features without real Supabase tables
+let _demoMembers = [];     // in-memory fake members for demo
 const CATS=['Fuel','Supplies','Equipment','Meals','Other'];
 const CATC={Fuel:'#d4750a',Supplies:'#185fa5',Equipment:'#6b3fa0',Meals:'#c0392b',Other:'#5f5e5a'};
 
@@ -844,6 +1341,7 @@ function lsBak() { try { localStorage.setItem('rt_receipts_bak',JSON.stringify(r
 
 // ── Tabs & Render ──────────────────────────────────────────────────
 function showTab(tab) {
+  if (tab === 'team') { showOrgManagement(); return; }
   currentTab=tab;
   ['dashboard','receipts','scan'].forEach(t=>{ document.getElementById('tab-'+t).className='ni'+(t===tab?' active':''); });
   if(tab==='scan'){pendingImage=null;pendingB64=null;scanStatus=null;editForm={store:'',date:'',amount:'',tax:'',paymentType:'',cardLast4:'',cardType:'',category:'Fuel',notes:''};}
@@ -1061,8 +1559,18 @@ function renderDash() {
   const ct={}; CATS.forEach(c=>{ct[c]=sum(receipts.filter(r=>r.category===c));});
   const max=Math.max(...Object.values(ct),1);
   const rec=[...receipts].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,5);
+  const adminBanner = adminViewAll && currentOrg
+    ? `<div class="sb info" style="cursor:pointer" onclick="toggleAdminView({closest:()=>null});render()">
+        <span>👥</span><div><strong>Team View</strong> — showing all ${receipts.length} receipts from ${currentOrg.name}. <u>Switch to My Receipts</u></div>
+      </div>` : '';
+  const demoBanner = DEMO_MODE
+    ? `<div class="sb warn" style="cursor:pointer" onclick="exitDemoMode()">
+        <span>🧪</span><div><strong>Demo Mode active</strong> — fake team data, no real Supabase calls. <u>Exit demo</u></div>
+      </div>` : '';
   return `
   ${renderTierBar()}
+  ${demoBanner}
+  ${adminBanner}
   ${!apiKey?`<div class="sb warn"><span>⚙</span><div>AI scanning inactive — tap <strong>⚙ API</strong> to add your Anthropic API key.</div></div>`:''}
   <div class="grid2">
     <div class="card accent"><div class="clabel">Total Spent</div><div class="cval">${fmt(tot)}</div></div>
@@ -1089,11 +1597,16 @@ function renderList() {
 }
 
 function rcCard(r) {
+  const submitterTag = adminViewAll && r.submittedBy
+    ? `<div style="font-size:11px;color:var(--text3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👤 ${esc(r.submittedBy)}</div>` : '';
   return `<div class="rc" onclick="viewReceipt('${r.id}')">
     <div class="rctop">
       <div style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">
         ${logoHtml(r, 32)}
-        <div class="rcname" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.store||'Unknown Store')}</div>
+        <div style="flex:1;min-width:0">
+          <div class="rcname" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.store||'Unknown Store')}</div>
+          ${submitterTag}
+        </div>
       </div>
       <div class="rcamt">${fmt(r.amount)}</div>
     </div>
@@ -1319,7 +1832,7 @@ async function doSave() {
   const payType  = editForm.paymentType || '';
   const last4    = editForm.cardLast4   || '';
   const cardType = editForm.cardType    || '';
-  const r={id:Date.now().toString(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,createdAt:new Date().toISOString()};
+  const r={id:Date.now().toString(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,createdAt:new Date().toISOString(),orgId:currentOrg?.id||null,submittedBy:currentUser?.email||null};
   await persistReceipt(r);
   pendingImage=null;pendingB64=null;scanStatus=null;
   editForm={store:'',date:'',amount:'',tax:'',paymentType:'',cardLast4:'',cardType:'',category:'Fuel',notes:''};
@@ -1349,6 +1862,7 @@ function viewReceipt(id) {
       <button class="mclose" onclick="this.closest('.overlay').remove()">✕</button>
     </div>
     ${r.image?`<img class="mimg" src="${r.image}" alt="Receipt" onclick="zoomImage(this.src)" style="cursor:zoom-in">`:''}
+    ${adminViewAll && r.submittedBy ? `<div class="mrow"><span class="mlabel">Submitted by</span><span class="mval" style="font-size:13px">${esc(r.submittedBy)}</span></div>` : ''}
     <div class="mrow"><span class="mlabel">Total</span><span class="mval" style="color:var(--accent);font-size:20px">${fmt(r.amount)}</span></div>
     ${r.tax!=null&&r.tax!==''?`<div class="mrow"><span class="mlabel">Tax</span><span class="mval">${fmt(r.tax)}</span></div>`:''}
     <div class="mrow"><span class="mlabel">Date</span><span class="mval">${r.date||'—'}</span></div>
@@ -1444,10 +1958,13 @@ function showSettings() {
 
   const items = [
     { icon:'🔑', title:'API Key',          sub:'Manage Anthropic API key',           action:'showApiSetup()' },
+    { icon:'🧪', title:'Multi-User Demo',  sub: demoModeActive ? '🟢 Demo active — tap to stop' : 'Test team features without real accounts', action:'showDemoMode()' },
     { icon:'☁',  title:'Backup & Restore', sub:'Export or import your receipts',     action:'showBackup()' },
     { icon:'⬇',  title:'Export to Excel',  sub:'Download all receipts as .xlsx',     action:'exportToExcel()' },
     userTier === 'free' ? { icon:'⭐', title:'Upgrade Plan', sub:'View Pro & Business plans', action:'showPricing()' } : null,
     userTier === 'pro'  ? { icon:'⭐', title:'Upgrade to Business', sub:'200 scans/mo, multi-user & more', action:'showUpgradeModal()' } : null,
+    userTier === 'business' ? { icon:'👥', title:'Team Management', sub: currentOrg ? currentOrg.name + ' · ' + (currentOrg.role) : 'Create or manage your team', action:'showTeamPanel()' } : null,
+    { icon:'🧪', title:'Demo: Test Team Features', sub: DEMO_MODE ? 'Demo active — tap to exit' : 'Simulate multi-user without real invites', action: DEMO_MODE ? 'exitDemoMode()' : 'showDemoTeamSetup()' },
     !isStandalone ? { icon:'📱', title:'Add to Home Screen',
       sub: isIOS ? 'Safari → Share → Add to Home Screen' : 'Browser menu → Add to Home Screen',
       action:'showInstallHelp()' } : null,
