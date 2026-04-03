@@ -544,7 +544,7 @@ async function inviteMember(email) {
     // Call Railway relay (handles CORS for Resend API)
     const fnUrl = 'https://receipt-invite-production.up.railway.app/send-invite';
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
     const res = await fetch(fnUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -698,20 +698,21 @@ function showOrgManagement() {
 }
 
 async function doInvite(btn) {
-  // Find the input relative to this button's modal (handles stacked overlays)
   const input = btn.closest('.modal')?.querySelector('#invite-email')
              || btn.parentElement?.querySelector('input[type="email"]')
              || document.getElementById('invite-email');
   const email = (input?.value || '').trim();
   if (!email || !email.includes('@')) { alert('Please enter a valid email.'); return; }
   btn.disabled = true; btn.textContent = 'Sending…';
-  const ok = await inviteMember(email);
-  if (ok) {
-    btn.closest('.overlay').remove();
-    showOrgManagement();
-  } else {
-    btn.disabled = false; btn.textContent = 'Send Invite';
+  try {
+    const ok = await inviteMember(email);
+    if (ok) {
+      btn.closest('.overlay')?.remove();
+    }
+  } catch(e) {
+    console.warn('doInvite error:', e.message);
   }
+  btn.disabled = false; btn.textContent = 'Send Invite';
 }
 
 async function toggleAdminView(btnOrNull) {
