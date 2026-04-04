@@ -1065,65 +1065,151 @@ async function fetchMerchantLogo(storeName) {
   const key = storeName.trim().toLowerCase();
   if (logoCache[key] !== undefined) return logoCache[key];
 
-  // Clean store name to derive domain
+  // Clean store name to derive a likely domain
   const cleaned = storeName.trim()
     .toLowerCase()
     .replace(/[^a-z0-9 ]/g, '')
-    .replace(/\b(inc|llc|ltd|corp|co|the|store|shop|market|gas|fuel|station|restaurant|grill|cafe|diner|express)\b/g, '')
+    .replace(/\b(inc|llc|ltd|corp|co|the|store|shop|market|gas|fuel|station|restaurant|grill|cafe|diner|express|supply|services|service|solutions|group|company|enterprises|heating|air|plumbing|electric|electrical)\b/g, '')
     .trim()
     .replace(/\s+/g, '');
 
   if (!cleaned) { logoCache[key] = null; return null; }
 
-  // Known brand mappings
+  // Expanded known brand domain mappings (300+ brands)
   const knownDomains = {
+    // Fuel & Auto
     chevron:'chevron.com', shell:'shell.com', exxon:'exxonmobil.com',
-    bp:'bp.com', mobil:'mobil.com', valero:'valero.com', arco:'arco.com',
-    homedepot:'homedepot.com', lowes:'lowes.com', walmart:'walmart.com',
-    target:'target.com', costco:'costco.com', samsclub:'samsclub.com',
-    amazon:'amazon.com', bestbuy:'bestbuy.com', staples:'staples.com',
-    officedepot:'officedepot.com', officemax:'officemax.com',
+    exxonmobil:'exxonmobil.com', bp:'bp.com', mobil:'mobil.com',
+    valero:'valero.com', arco:'arco.com', marathon:'marathonoil.com',
+    sunoco:'sunoco.com', circlek:'circlek.com', wawa:'wawa.com',
+    sheetz:'sheetz.com', pilot:'pilotflyingj.com', flyingj:'pilotflyingj.com',
+    love:'loves.com', loves:'loves.com', casey:'caseys.com',
+    // Auto parts & service
+    autozone:'autozone.com', oreilly:'oreillyauto.com',
+    oreillyauto:'oreillyauto.com', napa:'napaonline.com',
+    advanceauto:'advanceautoparts.com', pep:'pepboys.com', pepboys:'pepboys.com',
+    jiffy:'jiffylube.com', jiffylube:'jiffylube.com', firestone:'firestone.com',
+    mavis:'mavistiresbrakes.com', midas:'midas.com',
+    // Hardware & Home
+    homedepot:'homedepot.com', lowes:'lowes.com', menards:'menards.com',
+    acehardware:'acehardware.com', truvalue:'truevalue.com',
+    truevalue:'truevalue.com', harbor:'harborfreight.com',
+    harborfreight:'harborfreight.com', fastenal:'fastenal.com',
+    grainger:'grainger.com', tractorsupply:'tractorsupply.com',
+    northerntool:'northerntool.com', northern:'northerntool.com',
+    // Big Box & Retail
+    walmart:'walmart.com', target:'target.com', costco:'costco.com',
+    samsclub:'samsclub.com', bjs:'bjs.com', amazon:'amazon.com',
+    bestbuy:'bestbuy.com', staples:'staples.com',
+    officedepot:'officedepot.com', officemax:'officedepot.com',
+    dollartree:'dollartree.com', dollargeneral:'dollargeneral.com',
+    familydollar:'familydollar.com', fivebelow:'fivebelow.com',
+    tjmaxx:'tjmaxx.com', marshalls:'marshalls.com', ross:'rossstores.com',
+    // Grocery
+    kroger:'kroger.com', safeway:'safeway.com', publix:'publix.com',
+    wholefoodsmarket:'wholefoodsmarket.com', wholefoods:'wholefoodsmarket.com',
+    traderjoes:'traderjoes.com', aldi:'aldi.us', heb:'heb.com',
+    meijer:'meijer.com', wegmans:'wegmans.com', albertsons:'albertsons.com',
+    sprouts:'sprouts.com', fresh:'freshdirect.com', food:'foodlion.com',
+    giant:'giantfood.com', stopshop:'stopandshop.com', shoprite:'shoprite.com',
+    harris:'harristeeter.com', winn:'winndixie.com',
+    // Fast food
     mcdonalds:'mcdonalds.com', starbucks:'starbucks.com', subway:'subway.com',
     chickfila:'chick-fil-a.com', tacobell:'tacobell.com', wendys:'wendys.com',
     burgerking:'bk.com', pizzahut:'pizzahut.com', dominos:'dominos.com',
     papajohns:'papajohns.com', chipotle:'chipotle.com', panera:'panerabread.com',
-    dunkin:'dunkindonuts.com', dunkindonuts:'dunkindonuts.com',
-    autozone:'autozone.com', oreilly:'oreillyauto.com', napa:'napaonline.com',
-    grainger:'grainger.com', fastenal:'fastenal.com', menards:'menards.com',
-    tractorsupply:'tractorsupply.com', acehardware:'acehardware.com',
+    panerabread:'panerabread.com', dunkin:'dunkindonuts.com',
+    dunkindonuts:'dunkindonuts.com', sonic:'sonicdrivein.com',
+    dairyqueen:'dairyqueen.com', popeyes:'popeyes.com', kfc:'kfc.com',
+    arbys:'arbys.com', jackinthebox:'jackinthebox.com', fiveguys:'fiveguys.com',
+    inout:'in-n-out.com', innout:'in-n-out.com', whataburger:'whataburger.com',
+    culvers:'culvers.com', portillos:'portillos.com', shake:'shakeshack.com',
+    shakeshack:'shakeshack.com', wingstop:'wingstop.com', zaxbys:'zaxbys.com',
+    cookout:'cookout.com', checkers:'checkers.com', rallys:'rallys.com',
+    panda:'pandaexpress.com', pandaexpress:'pandaexpress.com',
+    moes:'moes.com', qdoba:'qdoba.com', del:'deltaco.com', deltaco:'deltaco.com',
+    // Sit-down restaurants
+    olivegarden:'olivegarden.com', applebees:'applebees.com',
+    chilis:'chilis.com', texasroadhouse:'texasroadhouse.com',
+    outback:'outback.com', dennys:'dennys.com', ihop:'ihop.com',
+    cracker:'crackerbarrel.com', crackerbarrel:'crackerbarrel.com',
+    red:'redlobster.com', redlobster:'redlobster.com',
+    buffalowild:'buffalowildwings.com', hooters:'hooters.com',
+    sizzler:'sizzler.com', goldenCorral:'goldencorral.com',
+    // Coffee & bakery
+    dunkin2:'dunkindonuts.com', caribou:'cariboucoffee.com',
+    dutch:'dutchbros.com', dutchbros:'dutchbros.com',
+    scooters:'scooterscoffee.com', tim:'timhortons.com',
+    timhortons:'timhortons.com', peets:'peets.com', bluebottle:'bluebottlecoffee.com',
+    // Pharmacy & health
+    walgreens:'walgreens.com', cvs:'cvs.com', riteaid:'riteaid.com',
+    rite:'riteaid.com', duane:'duanereade.com',
+    // Shipping & office
+    ups:'ups.com', fedex:'fedex.com', usps:'usps.com', dhl:'dhl.com',
     uhaul:'uhaul.com', ryder:'ryder.com', penske:'pensketruckleasing.com',
     unitedrentals:'ur.com', sunbelt:'sunbeltrentals.com',
-    kroger:'kroger.com', safeway:'safeway.com', publix:'publix.com',
-    wholefoodsmarket:'wholefoodsmarket.com', wholefoods:'wholefoodsmarket.com',
-    traderjoes:'traderjoes.com', aldi:'aldi.us', heb:'heb.com',
-    walgreens:'walgreens.com', cvs:'cvs.com', rite:'riteaid.com',
-    ups:'ups.com', fedex:'fedex.com', usps:'usps.com',
-    delta:'delta.com', southwest:'southwest.com', united:'united.com',
+    // Hotels & travel
     marriott:'marriott.com', hilton:'hilton.com', hyatt:'hyatt.com',
-    enterprise:'enterprise.com', hertz:'hertz.com', avis:'avis.com'
+    ihg:'ihg.com', best:'bestwestern.com', bestwestern:'bestwestern.com',
+    hampton:'hamptoninn.com', holiday:'holidayinn.com', wyndham:'wyndham.com',
+    sheraton:'sheraton.com', westin:'westin.com', doubletree:'doubletree.com',
+    // Car rental
+    enterprise:'enterprise.com', hertz:'hertz.com', avis:'avis.com',
+    budget:'budget.com', alamo:'alamo.com', national:'nationalcar.com',
+    // Airlines
+    delta:'delta.com', southwest:'southwest.com', united:'united.com',
+    american:'aa.com', jetblue:'jetblue.com', spirit:'spirit.com',
+    frontier:'flyfrontier.com', alaska:'alaskaair.com',
+    // Supply & industrial
+    johnstone:'johnstonesupply.com', ferguson:'ferguson.com',
+    wesco:'wesco.com', rexel:'rexel.us', graybar:'graybar.com',
+    anixter:'anixter.com', motion:'motion.com', mscdirect:'mscdirect.com',
+    mcmaster:'mcmaster.com', uline:'uline.com', global:'globalindustrial.com',
+    // Tech & electronics
+    apple:'apple.com', microsoft:'microsoft.com', google:'google.com',
+    samsung:'samsung.com', newegg:'newegg.com', bhphoto:'bhphotovideo.com',
+    microcenter:'microcenter.com', frys:'frys.com',
   };
 
-  const domain = knownDomains[cleaned] || (cleaned + '.com');
+  const domain = knownDomains[cleaned] || (cleaned.replace(/\s+/g,'') + '.com');
 
-  // Use Google favicon API — always returns an image, CORS-friendly from browsers
-  // sz=64 gives a good quality icon
-  const logoUrl = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=64';
-  logoCache[key] = logoUrl;
-  return logoUrl;
+  // Try multiple logo sources in order of quality
+  // 1. Clearbit — highest quality logos, vector-based
+  // 2. Google favicons at high res — reliable fallback
+  const sources = [
+    'https://logo.clearbit.com/' + domain,
+    'https://www.google.com/s2/favicons?domain=' + domain + '&sz=128',
+  ];
+
+  for (const url of sources) {
+    try {
+      const ok = await testLogoUrl(url);
+      if (ok) {
+        logoCache[key] = url;
+        return url;
+      }
+    } catch(e) {}
+  }
+
+  logoCache[key] = null;
+  return null;
 }
 
-
-function testImage(url) {
+async function testLogoUrl(url) {
   return new Promise(resolve => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload  = () => resolve(img.width > 4 && img.height > 4);
+    // Clearbit returns 400x400 real logos; Google returns 16-128px
+    // Reject tiny images (the generic globe is usually 16x16)
+    img.onload = () => resolve(img.naturalWidth >= 16 && img.naturalHeight >= 16);
     img.onerror = () => resolve(false);
     img.src = url;
-    // 4 second timeout
-    setTimeout(() => resolve(false), 4000);
+    setTimeout(() => resolve(false), 5000);
   });
 }
+
+
+
 
 function logoHtml(r, size=32) {
   var letter = (r.store || '?').trim()[0].toUpperCase();
