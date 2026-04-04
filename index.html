@@ -530,7 +530,7 @@ function showInviteFallback(email, link, timedOut) {
     + '<div class="mhead"><div class="mtitle">📋 Share Invite Link</div>'
     + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
     + '<div style="background:var(--surface2);border-radius:var(--r);padding:13px;margin-bottom:14px;font-size:13px;color:var(--text2);line-height:1.6">'
-    + 'Invite saved for <strong>' + email + '</strong>.<br>' + (timedOut ? 'Email server is starting up — it may take a minute. ' : 'Email could not be sent. ') + 'Share this link directly in the meantime:</div>'
+    + 'Invite saved for <strong>' + email + '</strong>.<br>' + (timedOut ? 'Email server is starting up — it may take a minute. ' : 'Email could not be sent. ') + 'Share this link directly:</div>'
     + '<div style="background:#f0f9f0;border:1px solid var(--accent);border-radius:var(--rs);padding:11px 13px;font-size:12px;word-break:break-all;color:var(--accent);margin-bottom:14px">' + link + '</div>'
     + '<button class="btn btn-p btn-full" style="padding:12px" id="copy-invite-btn">📋 Copy Link</button>'
     + '<button class="btn btn-s btn-full" style="padding:10px;margin-top:8px" onclick="this.closest(\'.overlay\').remove();showOrgManagement()">Done</button>'
@@ -754,6 +754,22 @@ async function doInvite(btn) {
     const ok = await inviteMember(email);
     if (ok) {
       btn.closest('.overlay')?.remove();
+      // Show success with spam note
+      const ov2 = document.createElement('div'); ov2.className = 'overlay';
+      ov2.innerHTML = '<div class="modal">'
+        + '<div class="mhead"><div class="mtitle">✉️ Invite Sent</div>'
+        + '<button class="mclose" onclick="this.closest(\'.overlay\').remove();showOrgManagement()">✕</button></div>'
+        + '<div style="text-align:center;padding:12px 0 8px">'
+        + '<div style="font-size:40px;margin-bottom:10px">📨</div>'
+        + '<div style="font-size:15px;font-weight:700;margin-bottom:8px">Invitation sent!</div>'
+        + '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">An invite was sent to<br><strong>' + email + '</strong></div>'
+        + '<div style="background:#fff8e1;border:1px solid #f59e0b44;border-radius:8px;padding:10px 13px;font-size:12px;color:#92640a;line-height:1.6;text-align:left;margin-bottom:16px">'
+        + '📬 <strong>Heads up:</strong> Ask your invitee to check their <strong>spam or junk folder</strong> if they don\'t see the email within a few minutes.'
+        + '</div>'
+        + '<button class="btn btn-p btn-full" style="padding:12px" onclick="this.closest(\'.overlay\').remove();showOrgManagement()">Done</button>'
+        + '</div></div>';
+      ov2.onclick = e => { if (e.target === ov2) { ov2.remove(); showOrgManagement(); } };
+      document.body.appendChild(ov2);
     }
   } catch(e) {
     console.warn('doInvite error:', e.message);
@@ -909,7 +925,7 @@ async function handleForgotPassword() {
       + '<div style="font-size:18px;font-weight:700;margin-bottom:10px">Check your email</div>'
       + '<div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:20px">'
       + 'We sent a password reset link to<br><strong>' + email + '</strong></div>'
-      + '<div style="font-size:12px;color:var(--text3)">Click the link in the email to set a new password.<br>Check your spam folder if you don\'t see it.</div>'
+      + '<div style="background:#fff8e1;border:1px solid #f59e0b44;border-radius:8px;padding:10px 13px;font-size:12px;color:#92640a;line-height:1.6">📬 <strong>Can\'t find it?</strong> Check your <strong>spam or junk folder</strong> — reset emails are sometimes filtered.</div>'
       + '<button class="btn btn-s btn-full" style="margin-top:20px;padding:12px" onclick="showAuthScreen(\'login\')">'
       + 'Back to Sign In</button>'
       + '</div>';
@@ -931,9 +947,30 @@ async function handleAuth(mode) {
   btn.textContent = mode === 'login' ? 'Signing in…' : 'Creating account…';
 
   try {
-    if (mode === 'signup') await signUp(email, password);
-    else await signIn(email, password);
-    await onAuthSuccess();
+    if (mode === 'signup') {
+      await signUp(email, password);
+      // Supabase sends a confirmation email — show a clear message
+      const card = document.querySelector('.auth-card');
+      if (card) {
+        card.innerHTML = '<div style="text-align:center;padding:20px 0">'
+          + '<div style="font-size:48px;margin-bottom:16px">📧</div>'
+          + '<div style="font-size:18px;font-weight:700;margin-bottom:10px">Check your email</div>'
+          + '<div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:12px">'
+          + 'We sent a confirmation link to<br><strong>' + email + '</strong><br>'
+          + 'Click it to activate your account.</div>'
+          + '<div style="background:#fff8e1;border:1px solid #f59e0b44;border-radius:8px;padding:10px 13px;font-size:12px;color:#92640a;line-height:1.6;margin-bottom:16px">'
+          + '📬 <strong>Can\'t find it?</strong> Check your <strong>spam or junk folder</strong> &#8212; confirmation emails are sometimes filtered.'
+          + '</div>'
+          + '<button class="btn btn-s btn-full" style="padding:12px" onclick="showAuthScreen(\'login\')">'
+          + 'Back to Sign In</button>'
+          + '</div>';
+        return;
+      }
+      await onAuthSuccess();
+    } else {
+      await signIn(email, password);
+      await onAuthSuccess();
+    }
   } catch(err) {
     btn.disabled = false;
     btn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
