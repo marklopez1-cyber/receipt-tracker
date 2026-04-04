@@ -1004,6 +1004,15 @@ const TIERS = {
   pro:      { name:'Pro',      scansPerMonth:50,  maxReceipts:9999, excel:true,  backup:true  },
   business: { name:'Business', scansPerMonth:200, maxReceipts:9999, excel:true,  backup:true  }
 };
+
+// Generate a deterministic product key from user ID + tier
+function generateProductKey(userId, tier) {
+  if (!userId) return null;
+  // Use first 8 chars of userId split into groups, prefixed by tier
+  const prefix = { free: 'RT-FREE', pro: 'RT-PRO', business: 'RT-BIZ' }[tier] || 'RT-FREE';
+  const uid = userId.replace(/-/g, '').toUpperCase();
+  return prefix + '-' + uid.slice(0,4) + '-' + uid.slice(4,8) + '-' + uid.slice(8,12);
+}
 const SOFT_CAP = 100; // show power-user warning above this
 
 let receipts=[],apiKey='',currentTab='dashboard',currentFilter='All';
@@ -1893,6 +1902,60 @@ async function doDelete(id,btn) {
 }
 
 // ── API Key ────────────────────────────────────────────────────────
+
+function showManageSubscription() {
+  const tier = userTier;
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = '<div class="modal">'
+    + '<div class="mhead"><div class="mtitle">📋 Manage Subscription</div>'
+    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
+
+    // Current plan
+    + '<div style="background:var(--surface2);border-radius:var(--r);padding:14px;margin-bottom:16px">'
+    + '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Current Plan</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center">'
+    + '<div style="font-size:16px;font-weight:700">' + TIERS[tier].name + '</div>'
+    + '<span class="tier-pill ' + tier + '">' + TIERS[tier].name + '</span>'
+    + '</div>'
+    + '<div style="font-size:12px;color:var(--text2);margin-top:6px">'
+    + TIERS[tier].scansPerMonth + ' AI scans/month'
+    + (tier === 'pro' ? ' · $7.99/mo' : tier === 'business' ? ' · $19.99/mo' : '')
+    + '</div>'
+    + '</div>'
+
+    // Downgrade options
+    + (tier === 'business' ? '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:10px" onclick="confirmDowngrade(\'pro\')">'
+      + '⬇ Downgrade to Pro — $7.99/mo</button>' : '')
+    + '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:16px;color:var(--text2)" onclick="confirmDowngrade(\'free\')">'
+    + (tier === 'business' ? '⬇ Downgrade to Free' : '⬇ Downgrade to Free') + '</button>'
+
+    // Cancel
+    + '<div style="border-top:1px solid var(--border);padding-top:14px">'
+    + '<button class="btn btn-d btn-full" style="padding:12px" onclick="confirmCancel()">'
+    + '✕ Cancel Subscription</button>'
+    + '<div style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">'
+    + 'Cancelling moves you to the Free plan. Your receipts are kept.</div>'
+    + '</div>'
+    + '</div>';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+async function confirmDowngrade(newTier) {
+  const names = { free: 'Free (0/mo)', pro: 'Pro ($7.99/mo)' };
+  if (!confirm('Downgrade to ' + (names[newTier] || newTier) + '?\n\nYou will lose access to higher-tier features at the end of your billing period.')) return;
+  await onUpgradeSuccess(newTier);
+  document.querySelectorAll('.overlay').forEach(o => o.remove());
+  alert('✓ Plan changed to ' + TIERS[newTier].name + '.');
+}
+
+async function confirmCancel() {
+  if (!confirm('Cancel your subscription?\n\nYou will be moved to the Free plan. Your receipts will be kept.')) return;
+  await onUpgradeSuccess('free');
+  document.querySelectorAll('.overlay').forEach(o => o.remove());
+  alert('✓ Subscription cancelled. You are now on the Free plan.');
+}
+
 function showSettings() {
   const ov = document.createElement('div');
   ov.className = 'overlay';
@@ -1904,10 +1967,11 @@ function showSettings() {
   const isStandalone = window.matchMedia('(display-mode:standalone)').matches || navigator.standalone;
 
   const items = [
-    { icon:'🔑', title:'API Key',          sub:'Manage Anthropic API key',           action:'showApiSetup()' },
+    { icon:'🔑', title:'Product Key', sub: apiKey ? '✓ Active · ' + TIERS[userTier].scansPerMonth + ' scans/mo' : 'Activate your plan key', action:'showProductKey()' },
     { icon:'☁',  title:'Backup & Restore', sub:'Export or import your receipts',     action:'showBackup()' },
     { icon:'⬇',  title:'Export to Excel',  sub:'Download all receipts as .xlsx',     action:'exportToExcel()' },
     userTier === 'free' ? { icon:'⭐', title:'Upgrade Plan', sub:'View Pro & Business plans', action:'showPricing()' } : null,
+    userTier !== 'free' ? { icon:'📋', title:'Manage Subscription', sub: TIERS[userTier].name + ' Plan · Downgrade or cancel', action:'showManageSubscription()' } : null,
     userTier === 'pro'  ? { icon:'⭐', title:'Upgrade to Business', sub:'200 scans/mo, multi-user & more', action:'showUpgradeModal()' } : null,
     userTier === 'business' ? { icon:'👥', title:'Team Management', sub: currentOrg ? currentOrg.name + ' · ' + (currentOrg.role) : 'Create or manage your team', action:'showTeamPanel()' } : null,
 
@@ -1945,23 +2009,48 @@ function showSettings() {
   document.body.appendChild(ov);
 }
 
-function showApiSetup() {
-  const ov=document.createElement('div'); ov.className='overlay';
-  ov.innerHTML=`<div class="modal">
-    <div class="mhead"><div class="mtitle">⚙ API Key Setup</div><button class="mclose" onclick="this.closest('.overlay').remove()">✕</button></div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px">Enter your Anthropic API key to enable AI receipt scanning. Stored in IndexedDB on this device only.</p>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:13px">Get yours at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--info)">console.anthropic.com → API Keys</a></p>
-    <label class="fl">API Key (starts with sk-ant-)</label>
-    <div class="keyrow">
-      <input class="fi" id="api-in" type="password" placeholder="sk-ant-api03-…" value="${apiKey}">
-      <button class="btn btn-p" onclick="applyKey()">Save</button>
-    </div>
-    ${apiKey?`<div style="color:var(--accent);font-size:12px;margin-top:8px">✓ Key saved (${apiKey.slice(0,14)}…)</div>
-    <button class="btn btn-d btn-full" style="margin-top:10px" onclick="clearKey()">Remove Key</button>`:''}
-    <div class="divider"></div>
-    <p style="font-size:12px;color:var(--text3);line-height:1.5">Cost: ~$0.01–0.03 per scan. New accounts receive free credits.</p>
-  </div>`;
-  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+function showApiSetup() { showProductKey(); }
+
+function showProductKey() {
+  const productKey = generateProductKey(currentUser?.id, userTier);
+  const tierInfo   = TIERS[userTier];
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = '<div class="modal">'
+    + '<div class="mhead"><div class="mtitle">🔑 Product Key</div>'
+    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
+    // Plan badge
+    + '<div style="background:var(--surface2);border-radius:var(--r);padding:14px;margin-bottom:14px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    + '<div style="font-weight:700;font-size:15px">' + tierInfo.name + ' Plan</div>'
+    + '<span class="tier-pill ' + userTier + '">' + tierInfo.name + '</span>'
+    + '</div>'
+    + '<div style="font-size:12px;color:var(--text2);line-height:1.8">'
+    + '✓ ' + tierInfo.scansPerMonth + ' AI scans / month<br>'
+    + (tierInfo.excel ? '✓ Excel export<br>' : '')
+    + (tierInfo.backup ? '✓ Backup & restore<br>' : '')
+    + '</div>'
+    + '</div>'
+    // Product key display
+    + '<div style="margin-bottom:14px">'
+    + '<label class="fl">Your Product Key</label>'
+    + '<div style="background:var(--surface2);border-radius:var(--rs);padding:12px 14px;font-family:monospace;font-size:14px;letter-spacing:1px;color:var(--accent);word-break:break-all;margin-bottom:6px">'
+    + (productKey || '—')
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--text3)">This key is tied to your account and plan. Keep it private.</div>'
+    + '</div>'
+    // Scan key input (hidden as "activation key" UX but stores the real Anthropic key)
+    + '<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">'
+    + '<label class="fl">Activation Key</label>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Enter the activation key provided in your welcome email to enable AI scanning.</div>'
+    + '<div class="keyrow">'
+    + '<input class="fi" id="api-in" type="password" placeholder="sk-ant-…" value="' + apiKey + '" autocomplete="off">'
+    + '<button class="btn btn-p" onclick="applyKey()">Activate</button>'
+    + '</div>'
+    + (apiKey ? '<div style="color:var(--accent);font-size:12px;margin-top:8px">✓ AI scanning active</div>'
+              + '<button class="btn btn-d btn-full" style="margin-top:8px" onclick="clearKey()">Deactivate</button>' : '')
+    + '</div>'
+    + '</div>';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
   document.body.appendChild(ov);
 }
 async function applyKey() {
