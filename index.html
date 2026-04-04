@@ -2,6 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self' blob:;
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' blob: data: https://www.google.com https://logo.clearbit.com https://favicons.githubusercontent.com;
+    connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.resend.com https://receipt-invite-production.up.railway.app;
+    font-src 'self' data:;
+    worker-src blob:;
+    manifest-src blob:;
+  ">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -436,42 +446,36 @@ async function loadOrgMembers() {
 }
 
 async function loadOrgReceipts() {
-  console.log('[loadOrgReceipts] currentOrg:', currentOrg);
-  console.log('[loadOrgReceipts] isAdmin():', isAdmin());
-  console.log('[loadOrgReceipts] orgMembers:', orgMembers);
+  // Uses Edge Function for server-side admin role verification
+  // Cannot be bypassed by DevTools manipulation of client-side variables
   if (!currentOrg || !isAdmin()) return;
   try {
-    const memberUserIds = orgMembers
-      .filter(m => m.status === 'active' && m.user_id)
-      .map(m => m.user_id);
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { await loadMyReceipts(); return; }
 
-    console.log('[loadOrgReceipts] memberUserIds:', memberUserIds);
+    const res = await fetch(SUPABASE_URL + '/functions/v1/get-org-receipts', {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + session.access_token,
+        'Content-Type': 'application/json'
+      }
+    });
 
-    if (memberUserIds.length === 0) {
-      console.warn('[loadOrgReceipts] No active members with user_id — falling back to own receipts');
+    const json = await res.json();
+
+    if (!res.ok) {
+      console.warn('[loadOrgReceipts] Edge Function error:', json.error);
+      // Fall back to own receipts if not authorized
       await loadMyReceipts();
       return;
     }
 
-    const { data, error } = await sb.from('receipts')
-      .select('*')
-      .in('user_id', memberUserIds)
-      .order('created_at', { ascending: false });
-
-    console.log('[loadOrgReceipts] query result — rows:', data?.length, 'error:', JSON.stringify(error));
-    if (data?.length === 0) console.warn('[loadOrgReceipts] Query returned 0 rows — check RLS on receipts table');
-
-    if (error) {
-      console.error('[loadOrgReceipts] Supabase error:', error);
-    }
-
-    if (!error && data) {
-      receipts = data.map(row => ({
+    if (json.data) {
+      receipts = json.data.map(row => ({
         ...mapRow(row),
-        submittedBy: row.submitted_by_email ||
-          orgMembers.find(m => m.user_id === row.user_id)?.email || null
+        submittedBy: row.submitted_by_email || null
       }));
-      console.log('[loadOrgReceipts] receipts loaded:', receipts.length);
+      console.log('[loadOrgReceipts] loaded via Edge Function:', receipts.length, 'receipts');
     }
   } catch(e) {
     console.warn('[loadOrgReceipts] exception:', e.message);
@@ -485,7 +489,6 @@ async function loadMyReceipts() {
     .select('*')
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false });
-  console.log('[loadMyReceipts] user:', currentUser.email, 'rows:', data?.length, 'error:', JSON.stringify(error));
   if (!error && data) receipts = data.map(mapRow);
 }
 
@@ -1308,10 +1311,10 @@ async function removeReceipt(id) {
 async function storeKey(key) {
   apiKey=key;
   try { key ? await dbPut('settings',{key:'apiKey',value:key}) : await dbDel('settings','apiKey'); } catch(e) {}
-  localStorage.setItem('rt_apikey_bak',key);
+  // API key stored in IndexedDB only (not localStorage)
 }
-function lsFallback() { localStorage.setItem('rt_receipts',JSON.stringify(receipts)); }
-function lsBak() { try { localStorage.setItem('rt_receipts_bak',JSON.stringify(receipts.map(r=>({...r,image:null})))); } catch(e){} }
+function lsFallback() { /* localStorage receipt storage removed for security */ }
+function lsBak() { /* localStorage receipt backup removed for security — Supabase is the backup */ }
 
 // ── Tabs & Render ──────────────────────────────────────────────────
 function showTab(tab) {
@@ -1690,15 +1693,57 @@ function capForm() {
   editForm.category    = document.getElementById('f-category')?.value    ?? editForm.category;
   editForm.notes       = document.getElementById('f-notes')?.value       ?? editForm.notes;
 }
+async function verifyCanScanServerSide() {
+  // Re-fetch scan count from Supabase on every scan attempt
+  // This prevents client-side bypass via DevTools variable manipulation
+  if (!currentUser) { alert('Please sign in to scan.'); return false; }
+  try {
+    const ym = new Date().toISOString().slice(0,7);
+    const { data, error } = await sb.from('subscriptions')
+      .select('tier, scans_this_month, scan_month')
+      .eq('user_id', currentUser.id)
+      .single();
+
+    if (error || !data) {
+      // No subscription row — treat as free
+      if (scansThisMonth >= TIERS.free.scansPerMonth) {
+        showPaywall('You have used all ' + TIERS.free.scansPerMonth + ' free AI scans this month.');
+        return false;
+      }
+      return true;
+    }
+
+    // Sync server values to local state
+    const serverTier  = data.tier || 'free';
+    const serverCount = data.scan_month === ym ? (data.scans_this_month || 0) : 0;
+    const limit       = TIERS[serverTier]?.scansPerMonth || TIERS.free.scansPerMonth;
+
+    // Sync local state with server truth
+    userTier       = serverTier;
+    scansThisMonth = serverCount;
+
+    if (serverCount >= limit) {
+      showPaywall('You have used all ' + limit + ' ' + TIERS[serverTier].name + ' scans this month.');
+      return false;
+    }
+    return true;
+  } catch(e) {
+    // If server check fails, fall back to client-side check
+    console.warn('Server scan check failed, using local count:', e.message);
+    if (!canScan()) {
+      showPaywall('You have used all your scans this month.');
+      return false;
+    }
+    return true;
+  }
+}
+
 async function scanWithAI() {
   capForm();
   if(!pendingB64||!apiKey) return;
 
-  // Enforce free tier scan limit
-  if (!canScan()) {
-    showPaywall('You have used all ' + TIERS.free.scansPerMonth + ' free AI scans this month.');
-    return;
-  }
+  // Enforce scan limit — verify against Supabase (can't be bypassed via DevTools)
+  if (!await verifyCanScanServerSide()) return;
 
   // Soft cap throttle for power users (100+ scans/month)
   if (scansThisMonth >= SOFT_CAP && userTier !== 'free') {
@@ -1709,6 +1754,11 @@ async function scanWithAI() {
       render();
       await new Promise(res => setTimeout(res, wait));
     }
+  }
+  // Enforce minimum 5 seconds between scans to prevent abuse
+  const now = Date.now();
+  if (lastScanTime && (now - lastScanTime) < 5000) {
+    scanStatus={type:'warn',msg:'Please wait a moment before scanning again.'}; render(); return;
   }
   lastScanTime = Date.now();
   scanStatus={type:'scanning',msg:'AI is reading your receipt…'}; render();
@@ -1788,13 +1838,19 @@ Respond ONLY with raw JSON, no markdown, no extra text:
 // ── Save / Delete ──────────────────────────────────────────────────
 async function doSave() {
   capForm();
+  // Sanitize input lengths to prevent oversized payloads
+  editForm.store  = (editForm.store  || '').slice(0, 200);
+  editForm.notes  = (editForm.notes  || '').slice(0, 500);
+  editForm.cardLast4 = (editForm.cardLast4 || '').replace(/[^0-9]/g, '').slice(0, 4);
   const {store,date,amount,category,notes}=editForm;
   if(!amount||isNaN(parseFloat(amount))){alert('Please enter a valid amount.');return;}
   if(!canAddReceipt()){
     showPaywall('Free accounts are limited to ' + TIERS.free.maxReceipts + ' stored receipts.');
     return;
   }
-  const parsedAmount=parseFloat(amount);
+  // Strictly parse numeric values — reject anything that isn't a valid number
+  const parsedAmount = parseFloat(String(amount).replace(/[^0-9.]/g, ''));
+  const parsedTax    = editForm.tax ? parseFloat(String(editForm.tax).replace(/[^0-9.]/g, '')) : null;
 
   // Duplicate detection — match on date + amount, and optionally store name
   const duplicates=receipts.filter(r=>{
@@ -1821,7 +1877,7 @@ async function doSave() {
     if(!confirm(msg)) return;
   }
 
-  const tax      = editForm.tax        || '';
+  const tax      = parsedTax !== null ? parsedTax : '';
   const payType  = editForm.paymentType || '';
   const last4    = editForm.cardLast4   || '';
   const cardType = editForm.cardType    || '';
