@@ -1168,7 +1168,18 @@ function canAddReceipt() {
 
 async function setTier(tier) {
   userTier = tier;
+  // Save to IndexedDB (local)
   await dbPut('settings', { key:'userTier', value:tier });
+  // Save to Supabase (persists across devices and sessions)
+  if (currentUser) {
+    const ym = new Date().toISOString().slice(0,7);
+    await sb.from('subscriptions').upsert({
+      user_id: currentUser.id,
+      tier,
+      scans_this_month: scansThisMonth || 0,
+      scan_month: ym
+    });
+  }
 }
 
 async function persistReceipt(r) {
