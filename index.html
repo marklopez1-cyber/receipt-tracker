@@ -202,21 +202,19 @@
 <body>
 <div class="app" id="app">
 
-  
-    </div>
-  </div>
   <div class="header">
     <div class="header-top">
       <div class="logo">ReceiptTrack <small>Expense Manager</small></div>
       <div class="hbtns">
         <button class="hbtn" onclick="showSettings()">⚙ Settings</button>
       </div>
+    </div>
+  </div>
   <div class="nav">
     <div class="ni active" onclick="showTab('dashboard')" id="tab-dashboard"><div class="ni-icon">◼</div>Dashboard</div>
     <div class="ni" onclick="showTab('receipts')" id="tab-receipts"><div class="ni-icon">☰</div>Receipts</div>
     <div class="ni hidden" onclick="showTab('team')" id="tab-team"><div class="ni-icon">👥</div>Team</div>
-    <div class="ni" onclick="showTab('scan')" id="tab-scan"><div class="ni-icon">+</div>Scan / Add</div>
-  </div>
+    <div class="ni" onclick="showTab('scan')" id="tab-scan"><div class="ni-icon">+</div>
   <div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
 <input type="file" id="file-input" class="hidden" accept="image/*">
 <input type="file" id="import-input" class="hidden" accept=".json">
