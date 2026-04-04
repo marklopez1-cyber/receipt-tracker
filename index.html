@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self' blob:;
-    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data: https://www.google.com https://logo.clearbit.com https://favicons.githubusercontent.com;
-    connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.resend.com https://receipt-invite-production.up.railway.app;
-    font-src 'self' data:;
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com;
+    style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+    img-src 'self' blob: data: https: ;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.resend.com https://receipt-invite-production.up.railway.app https://cdn.jsdelivr.net;
+    font-src 'self' data: https://cdn.jsdelivr.net;
     worker-src blob:;
-    manifest-src blob:;
+    manifest-src blob: 'self';
   ">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -446,8 +446,6 @@ async function loadOrgMembers() {
 }
 
 async function loadOrgReceipts() {
-  // Uses Edge Function for server-side admin role verification
-  // Cannot be bypassed by DevTools manipulation of client-side variables
   if (!currentOrg || !isAdmin()) return;
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -457,25 +455,35 @@ async function loadOrgReceipts() {
       method: 'GET',
       headers: {
         'Authorization': 'Bearer ' + session.access_token,
+        'apikey': SUPABASE_KEY,
         'Content-Type': 'application/json'
       }
     });
 
     const json = await res.json();
+    console.log('[loadOrgReceipts] status:', res.status, 'response:', JSON.stringify(json).slice(0,200));
 
     if (!res.ok) {
-      console.warn('[loadOrgReceipts] Edge Function error:', json.error);
-      // Fall back to own receipts if not authorized
+      console.warn('[loadOrgReceipts] Edge Function error:', res.status, json.error);
+      // Show user-facing error and fall back
+      if (res.status === 403) {
+        alert('Team admin access could not be verified. Please sign out and back in.');
+      }
       await loadMyReceipts();
       return;
     }
 
-    if (json.data) {
-      receipts = json.data.map(row => ({
+    // Edge Function returns { data: [...] }
+    const rows = json.data || json || [];
+    if (Array.isArray(rows) && rows.length >= 0) {
+      receipts = rows.map(row => ({
         ...mapRow(row),
         submittedBy: row.submitted_by_email || null
       }));
-      console.log('[loadOrgReceipts] loaded via Edge Function:', receipts.length, 'receipts');
+      console.log('[loadOrgReceipts] loaded', receipts.length, 'team receipts');
+    } else {
+      console.warn('[loadOrgReceipts] unexpected response format:', json);
+      await loadMyReceipts();
     }
   } catch(e) {
     console.warn('[loadOrgReceipts] exception:', e.message);
