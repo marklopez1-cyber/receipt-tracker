@@ -316,8 +316,19 @@ async function signIn(email, password) {
 
 async function signOut() {
   await sb.auth.signOut();
-  currentUser = null;
-  receipts = [];
+  // Reset all state so next login starts clean
+  currentUser    = null;
+  receipts       = [];
+  currentOrg     = null;
+  orgMembers     = [];
+  adminViewAll   = false;
+  userTier       = 'free';
+  scansThisMonth = 0;
+  apiKey         = '';
+  currentTab     = 'dashboard';
+  currentFilter  = 'All';
+  // Hide team tab
+  document.getElementById('tab-team')?.classList.add('hidden');
   showAuthScreen('login');
 }
 
@@ -419,36 +430,45 @@ async function loadOrgMembers() {
 }
 
 async function loadOrgReceipts() {
+  console.log('[loadOrgReceipts] currentOrg:', currentOrg);
+  console.log('[loadOrgReceipts] isAdmin():', isAdmin());
+  console.log('[loadOrgReceipts] orgMembers:', orgMembers);
   if (!currentOrg || !isAdmin()) return;
   try {
-    // Get all active member user_ids in this org
     const memberUserIds = orgMembers
       .filter(m => m.status === 'active' && m.user_id)
       .map(m => m.user_id);
 
+    console.log('[loadOrgReceipts] memberUserIds:', memberUserIds);
+
     if (memberUserIds.length === 0) {
-      // Fallback: just show own receipts
+      console.warn('[loadOrgReceipts] No active members with user_id — falling back to own receipts');
       await loadMyReceipts();
       return;
     }
 
-    // Load receipts from ALL active members by user_id
-    // This catches receipts saved before org_id was set
     const { data, error } = await sb.from('receipts')
       .select('*')
       .in('user_id', memberUserIds)
       .order('created_at', { ascending: false });
 
+    console.log('[loadOrgReceipts] query result — rows:', data?.length, 'error:', JSON.stringify(error));
+    if (data?.length === 0) console.warn('[loadOrgReceipts] Query returned 0 rows — check RLS on receipts table');
+
+    if (error) {
+      console.error('[loadOrgReceipts] Supabase error:', error);
+    }
+
     if (!error && data) {
       receipts = data.map(row => ({
         ...mapRow(row),
-        // Tag submitter email from org members list if not already set
         submittedBy: row.submitted_by_email ||
           orgMembers.find(m => m.user_id === row.user_id)?.email || null
       }));
+      console.log('[loadOrgReceipts] receipts loaded:', receipts.length);
     }
   } catch(e) {
-    console.warn('loadOrgReceipts:', e.message);
+    console.warn('[loadOrgReceipts] exception:', e.message);
     await loadMyReceipts();
   }
 }
@@ -737,6 +757,9 @@ async function doInvite(btn) {
 async function toggleAdminView(btnOrNull) {
   adminViewAll = !adminViewAll;
   if (adminViewAll) {
+    // Always reload members fresh before querying — catches user_id fixes since login
+    await loadOrgMembers();
+    console.log('[toggleAdminView] orgMembers after reload:', orgMembers);
     await loadOrgReceipts();
   } else {
     await loadMyReceipts();
@@ -759,6 +782,8 @@ function showAuthScreen(mode) {
   }
   authEl.className = 'auth-screen';
   const isLogin = (mode === 'login');
+  const urlParams = new URLSearchParams(window.location.search);
+  const hasInvite = urlParams.has('invite_org');
 
   const confirmField = isLogin ? '' : [
     '<div class="fg"><label class="fl">Confirm Password</label>',
@@ -778,7 +803,8 @@ function showAuthScreen(mode) {
     '  </div>',
     '  <div class="auth-card">',
     '    <div class="auth-title">' + (isLogin ? 'Sign in' : 'Create account') + '</div>',
-    '    <div class="auth-sub">' + (isLogin ? 'Welcome back' : 'Start tracking expenses for free') + '</div>',
+    '    <div class="auth-sub">' + (hasInvite ? 'Create an account to join your team' : isLogin ? 'Welcome back' : 'Start tracking expenses for free') + '</div>',
+    hasInvite ? '    <div style="background:#2d5a2715;border:1px solid #2d5a2733;border-radius:8px;padding:10px 14px;font-size:13px;color:#2d5a27;margin-bottom:8px;text-align:center">👥 You\'ve been invited to join a team. Create an account below to accept.</div>' : '',
     '    <div id="auth-error" class="auth-error hidden"></div>',
     '    <div class="fg"><label class="fl">Email</label>',
     '      <input class="fi" id="auth-email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email"></div>',
@@ -921,9 +947,10 @@ async function onAuthSuccess() {
 function renderUserBar() {
   if (!currentUser) return '';
   const email = currentUser.email || '';
+  const shortEmail = email.length > 22 ? email.slice(0, 20) + '…' : email;
   return `<div class="user-bar">
-    <span class="user-bar-email">👤 ${email}</span>
-    <span class="user-bar-signout" onclick="signOut()">Sign Out</span>
+    <span class="user-bar-email" title="${email}">👤 ${shortEmail}</span>
+    <button class="btn btn-d" style="padding:4px 10px;font-size:11px;border-radius:20px" onclick="signOut()">Sign Out</button>
   </div>`;
 }
 
@@ -1127,7 +1154,10 @@ async function init() {
   const user = await getSession();
   if (!user) {
     document.getElementById('app').classList.add('hidden');
-    showAuthScreen('login');
+    // If arriving via invite link, show signup form not login
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasInvite = urlParams.has('invite_org');
+    showAuthScreen(hasInvite ? 'signup' : 'login');
   } else {
     await onAuthSuccess();
   }
