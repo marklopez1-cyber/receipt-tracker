@@ -587,6 +587,25 @@ async function removeMember(memberId) {
   await loadOrgMembers();
 }
 
+async function checkPendingInvites() {
+  // On every login, activate any pending invite rows matching this user's email
+  if (!currentUser) return;
+  try {
+    const { data } = await sb.from('org_members')
+      .select('*')
+      .eq('email', currentUser.email)
+      .eq('status', 'invited');
+    if (!data || data.length === 0) return;
+    for (const invite of data) {
+      await sb.from('org_members').update({
+        user_id:   currentUser.id,
+        status:    'active',
+        joined_at: new Date().toISOString()
+      }).eq('id', invite.id);
+    }
+  } catch(e) { console.warn('checkPendingInvites:', e.message); }
+}
+
 async function acceptInvite(orgId) {
   if (!currentUser || !orgId) return;
   try {
@@ -884,9 +903,11 @@ async function onAuthSuccess() {
   if (authEl) authEl.remove();
   document.getElementById('app').classList.remove('hidden');
   await loadUserSubscription();
+  // Always check for pending invites by email (catches members who didn't click link)
+  await checkPendingInvites();
   await loadOrg();
   if (currentOrg) await loadOrgMembers();
-  // Check URL for pending invite acceptance
+  // Also check URL param for explicit invite link clicks
   const urlParams = new URLSearchParams(window.location.search);
   const inviteOrgId = urlParams.get('invite_org');
   if (inviteOrgId) { await acceptInvite(inviteOrgId); history.replaceState({}, '', window.location.pathname); }
