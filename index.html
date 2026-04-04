@@ -477,10 +477,14 @@ async function loadMyReceipts() {
 }
 
 function mapRow(row) {
+  // date may come as a Date object or 'YYYY-MM-DD' string from Supabase
+  const dateStr = row.date
+    ? (typeof row.date === 'string' ? row.date.slice(0,10) : new Date(row.date).toISOString().slice(0,10))
+    : '';
   return {
     id:            row.id,
     store:         row.store || '',
-    date:          row.date || '',
+    date:          dateStr,
     amount:        row.amount || 0,
     tax:           row.tax,
     category:      row.category || 'Other',
@@ -489,7 +493,7 @@ function mapRow(row) {
     cardType:      row.card_type || '',
     notes:         row.notes || '',
     logoUrl:       row.logo_url || null,
-    image:         row.image || null,
+    image:         row.image || row.image_path || null,
     createdAt:     row.created_at,
     orgId:         row.org_id || null,
     submittedBy:   row.submitted_by_email || null,
