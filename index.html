@@ -384,7 +384,13 @@ async function saveReceiptToSupabase(r) {
     submitted_by_email: currentUser.email || null,
     created_at: r.createdAt
   };
-  await sb.from('receipts').upsert(row);
+  const { error } = await sb.from('receipts').upsert(row);
+  if (error) {
+    console.error('[saveReceiptToSupabase] ERROR:', error.message, error.code, error.details);
+    alert('Receipt could not be saved to cloud: ' + error.message);
+  } else {
+    console.log('[saveReceiptToSupabase] saved OK for', currentUser.email);
+  }
 }
 
 async function deleteReceiptFromSupabase(id) {
