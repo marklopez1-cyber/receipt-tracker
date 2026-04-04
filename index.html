@@ -593,7 +593,7 @@ async function loadOrgReceipts() {
     receipts = (data || []).map(row => ({
       ...mapRow(row),
       submittedBy: row.submitted_by_email || null
-    }));
+    })).sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0));
     console.log('[loadOrgReceipts] loaded', receipts.length, 'team receipts via RPC');
   } catch(e) {
     console.warn('[loadOrgReceipts] exception:', e.message);
@@ -607,7 +607,9 @@ async function loadMyReceipts() {
     .select('*')
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false });
-  if (!error && data) receipts = data.map(mapRow);
+  if (!error && data) {
+    receipts = data.map(mapRow).sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0));
+  }
 }
 
 function mapRow(row) {
@@ -1484,6 +1486,7 @@ async function setTier(tier) {
 
 async function persistReceipt(r) {
   receipts.unshift(r);
+  receipts.sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0));
   // Save to Supabase (cloud) and IndexedDB (local cache)
   await saveReceiptToSupabase(r);
   try { await dbPut('receipts',r); } catch(e) { lsFallback(); }
@@ -2507,7 +2510,7 @@ async function onImport(e) {
     try { await saveReceiptToSupabase(r); } catch(e) {}
   }
 
-  receipts=[...receipts,...newOnes].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  receipts=[...receipts,...newOnes].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0));
   lsBak();
   document.querySelector('.overlay')?.remove();
   render();
