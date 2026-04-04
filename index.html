@@ -763,15 +763,15 @@ async function doInvite(btn) {
 
 async function toggleAdminView(btnOrNull) {
   adminViewAll = !adminViewAll;
+  // Close overlay first if present
+  try { if (btnOrNull && btnOrNull.closest) btnOrNull.closest('.overlay')?.remove(); } catch(e) {}
   if (adminViewAll) {
-    // Always reload members fresh before querying — catches user_id fixes since login
     await loadOrgMembers();
-    console.log('[toggleAdminView] orgMembers after reload:', orgMembers);
     await loadOrgReceipts();
   } else {
+    // Reset to only my receipts
     await loadMyReceipts();
   }
-  try { if (btnOrNull && btnOrNull.closest) btnOrNull.closest('.overlay')?.remove(); } catch(e) {}
   render();
 }
 
@@ -1515,7 +1515,7 @@ function renderDash() {
   const max=Math.max(...Object.values(ct),1);
   const rec=[...receipts].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,5);
   const adminBanner = adminViewAll && currentOrg
-    ? `<div class="sb info" style="cursor:pointer" onclick="toggleAdminView({closest:()=>null});render()">
+    ? `<div class="sb info" style="cursor:pointer" onclick="toggleAdminView({closest:()=>null})">
         <span>👥</span><div><strong>Team View</strong> — showing all ${receipts.length} receipts from ${currentOrg.name}. <u>Switch to My Receipts</u></div>
       </div>` : '';
 
