@@ -1905,38 +1905,78 @@ async function doDelete(id,btn) {
 
 function showManageSubscription() {
   const tier = userTier;
+
+  function planBox(t, isCurrent) {
+    const prices  = { free:'Free', pro:'$7.99/mo', business:'$19.99/mo' };
+    const features = {
+      free: [
+        '10 AI receipt scans / month',
+        'Up to 30 stored receipts',
+        'Manual receipt entry',
+        'Category & spending charts',
+        'Dashboard & receipt list',
+      ],
+      pro: [
+        '50 AI receipt scans / month',
+        'Unlimited receipt storage',
+        'Everything in Free',
+        'Excel export (.xlsx)',
+        'Backup & restore',
+        'Priority over Free users',
+      ],
+      business: [
+        '200 AI receipt scans / month',
+        'Unlimited receipt storage',
+        'Everything in Pro',
+        'Multi-user team accounts',
+        'Admin team receipt view',
+        'Member invite by email',
+        'QuickBooks export (coming soon)',
+        'Priority support',
+      ],
+    };
+    const names = { free:'Free', pro:'Pro', business:'Business' };
+    const accent = isCurrent ? 'border:2px solid var(--accent)' : 'border:1px solid var(--border)';
+    const badge  = isCurrent ? '<span style="background:var(--accent);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px;margin-left:8px">CURRENT</span>' : '';
+    const featureRows = features[t].map(f =>
+      '<div style="display:flex;gap:7px;font-size:12px;color:' + (isCurrent?'var(--text1)':'var(--text2)') + ';padding:3px 0">'
+      + '<span style="color:var(--accent);flex-shrink:0">✓</span><span>' + f + '</span></div>'
+    ).join('');
+
+    return '<div style="' + accent + ';border-radius:var(--r);padding:14px;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      + '<div style="font-size:15px;font-weight:700">' + names[t] + badge + '</div>'
+      + '<div style="font-size:14px;color:var(--text2);font-weight:600">' + prices[t] + '</div>'
+      + '</div>'
+      + featureRows
+      + '</div>';
+  }
+
   const ov = document.createElement('div'); ov.className = 'overlay';
-  ov.innerHTML = '<div class="modal">'
+  ov.innerHTML = '<div class="modal" style="max-height:90vh;overflow-y:auto">'
     + '<div class="mhead"><div class="mtitle">📋 Manage Subscription</div>'
     + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
 
-    // Current plan
-    + '<div style="background:var(--surface2);border-radius:var(--r);padding:14px;margin-bottom:16px">'
-    + '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Current Plan</div>'
-    + '<div style="display:flex;justify-content:space-between;align-items:center">'
-    + '<div style="font-size:16px;font-weight:700">' + TIERS[tier].name + '</div>'
-    + '<span class="tier-pill ' + tier + '">' + TIERS[tier].name + '</span>'
-    + '</div>'
-    + '<div style="font-size:12px;color:var(--text2);margin-top:6px">'
-    + TIERS[tier].scansPerMonth + ' AI scans/month'
-    + (tier === 'pro' ? ' · $7.99/mo' : tier === 'business' ? ' · $19.99/mo' : '')
-    + '</div>'
-    + '</div>'
+    // All plan tiers
+    + '<div class="sec" style="margin:0 0 10px">Your Plans</div>'
+    + planBox('business', tier === 'business')
+    + planBox('pro',      tier === 'pro')
+    + planBox('free',     tier === 'free')
 
-    // Downgrade options
-    + (tier === 'business' ? '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:10px" onclick="confirmDowngrade(\'pro\')">'
-      + '⬇ Downgrade to Pro — $7.99/mo</button>' : '')
-    + '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:16px;color:var(--text2)" onclick="confirmDowngrade(\'free\')">'
-    + (tier === 'business' ? '⬇ Downgrade to Free' : '⬇ Downgrade to Free') + '</button>'
-
-    // Cancel
-    + '<div style="border-top:1px solid var(--border);padding-top:14px">'
-    + '<button class="btn btn-d btn-full" style="padding:12px" onclick="confirmCancel()">'
-    + '✕ Cancel Subscription</button>'
-    + '<div style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">'
-    + 'Cancelling moves you to the Free plan. Your receipts are kept.</div>'
+    // Action buttons
+    + '<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">'
+    + '<div class="sec" style="margin:0 0 10px">Change Plan</div>'
+    + (tier === 'business'
+        ? '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:8px" onclick="confirmDowngrade(\'pro\')">⬇ Switch to Pro — $7.99/mo</button>'
+        : '')
+    + (tier !== 'free'
+        ? '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:8px;color:var(--text2)" onclick="confirmDowngrade(\'free\')">⬇ Downgrade to Free</button>'
+        : '')
+    + '<button class="btn btn-d btn-full" style="padding:12px;margin-top:4px" onclick="confirmCancel()">✕ Cancel Subscription</button>'
+    + '<div style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">Cancelling moves you to Free. Your receipts are always kept.</div>'
     + '</div>'
     + '</div>';
+
   ov.onclick = e => { if (e.target === ov) ov.remove(); };
   document.body.appendChild(ov);
 }
