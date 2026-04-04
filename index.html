@@ -194,40 +194,129 @@
   .settings-user-tier { display:inline-block; margin-top:6px; }
   .hidden { display:none; }
 
+  /* ═══════════════════════════════════════════════════
+     TABLET  ≥ 768px
+     Layout: sidebar (left) + main column (right)
+     Nav becomes vertical sidebar
+  ════════════════════════════════════════════════════ */
   @media (min-width: 768px) {
-    .app { max-width:100%; flex-direction:row; }
+
+    /* App becomes a two-column layout */
+    .app {
+      max-width: 100%;
+      flex-direction: row;
+      align-items: stretch;
+    }
+
+    /* ── Sidebar nav ── */
     .nav {
-      flex-direction:column;
-      width:180px;
-      min-width:180px;
-      height:100vh;
-      position:sticky;
-      top:0;
-      border-bottom:none;
-      border-right:1px solid var(--border);
-      overflow-y:auto;
-      flex-shrink:0;
+      flex-direction: column;
+      flex-shrink: 0;
+      width: 200px;
+      min-height: 100vh;
+      height: auto;
+      border-bottom: none;
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      align-self: flex-start;
+      background: var(--surface);
+      padding-top: 8px;
+      overflow-y: auto;
     }
+
+    /* Nav items — left-aligned rows */
     .ni {
-      flex:none;
-      text-align:left;
-      padding:12px 18px;
-      border-bottom:none;
-      border-left:3px solid transparent;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      font-size:13px;
+      flex: none;
+      width: 100%;
+      text-align: left;
+      padding: 13px 20px;
+      font-size: 14px;
+      border-bottom: none;
+      border-left: 3px solid transparent;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
-    .ni.active { border-bottom-color:transparent; border-left-color:var(--accent); }
-    .ni-icon { font-size:16px; margin-bottom:0; }
-    .content { max-width:900px; margin:0 auto; padding:20px 28px; padding-bottom:40px; }
-    .grid2 { grid-template-columns:repeat(4,1fr); gap:12px; }
-    .overlay { align-items:center; justify-content:center; }
-    .modal { border-radius:16px; max-width:520px; max-height:90vh; }
-    .tbar { position:static; transform:none; left:auto; max-width:100%; border-top:none; border-bottom:1px solid var(--border); }
-    .frow { grid-template-columns:1fr 1fr; }
-    .catbars { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
+    .ni.active {
+      border-bottom-color: transparent;
+      border-left-color: var(--accent);
+      background: var(--accent-light);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .ni-icon { font-size: 17px; margin-bottom: 0; }
+
+    /* ── Right column: header + content stacked ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    /* Content fills remaining width */
+    .content {
+      padding: 24px 32px;
+      padding-bottom: 40px;
+      max-width: 100%;
+    }
+
+    /* 4-col stat grid */
+    .grid2 { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+
+    /* Category bars side by side */
+    .catbars { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+
+    /* Receipt cards in 2 columns */
+    .rc-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* Total bar — no longer fixed, sits naturally */
+    .tbar {
+      position: static;
+      transform: none;
+      left: auto;
+      width: 100%;
+      max-width: 100%;
+      border-top: 1px solid var(--border);
+      border-bottom: none;
+      padding: 12px 32px;
+    }
+
+    /* Modals centered on screen */
+    .overlay {
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal {
+      border-radius: 16px;
+      max-width: 540px;
+      width: 100%;
+      max-height: 90vh;
+    }
+
+    /* Scan form wider */
+    .frow { grid-template-columns: 1fr 1fr; }
+    .preview { max-height: 300px; }
+    .mimg { max-height: 340px; }
+
+    /* Card values bigger */
+    .cval { font-size: 26px; }
+    .rcamt { font-size: 18px; }
+  }
+
+  /* ═══════════════════════════════════════════════════
+     DESKTOP  ≥ 1100px
+     Wider sidebar, 3-col receipts, larger content
+  ════════════════════════════════════════════════════ */
+  @media (min-width: 1100px) {
+    .nav { width: 220px; }
+    .content { padding: 28px 48px; padding-bottom: 48px; }
+    .grid2 { gap: 18px; }
+    .rc-list { grid-template-columns: 1fr 1fr 1fr; }
+    .catbars { gap: 0 40px; }
+    .modal { max-width: 580px; }
+    .cval { font-size: 28px; }
   }
 
   /* ── Responsive / Desktop Layout ─────────────────────────────── */
@@ -1689,7 +1778,7 @@ function renderDash() {
     <div class="crtop"><div class="crname"><div class="dot" style="background:${CATC[c]}"></div>${c}</div><div class="cramount">${fmt(ct[c])}</div></div>
     <div class="barbg"><div class="barfill" style="width:${(ct[c]/max*100).toFixed(1)}%;background:${CATC[c]}"></div></div>
   </div>`).join('')}</div>
-  ${rec.length?`<div class="sec">Recent Receipts</div>${rec.map(rcCard).join('')}`:''}
+  ${rec.length?`<div class="sec">Recent Receipts</div><div class="rc-list">${rec.map(rcCard).join('')}</div>`:''}
   ${!receipts.length?`<div class="empty"><div class="empty-icon">🧾</div><div class="empty-title">No receipts yet</div><div class="empty-sub">Tap <strong>Scan / Add</strong> to get started.</div></div>`:''}`;
 }
 
@@ -1698,7 +1787,7 @@ function renderList() {
   const sorted=[...fil].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
   return `
   <div class="filters">${['All',...CATS].map(f=>`<button class="chip${currentFilter===f?' active':''}" onclick="setFilter('${f}')">${f}</button>`).join('')}</div>
-  ${sorted.length?sorted.map(rcCard).join(''):`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in "${currentFilter}"</div></div>`}
+  <div class="rc-list">${sorted.length?sorted.map(rcCard).join(''):`<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in "${currentFilter}"</div></div>`}</div>
   <div class="tbar"><div class="tlabel">Total (${fil.length})</div>
 </div><div class="tval">${fmt(sum(fil))}</div></div>`;
 }
