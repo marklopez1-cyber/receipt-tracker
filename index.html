@@ -37,6 +37,7 @@
   }
   body { background:var(--bg); color:var(--text); min-height:100vh; overscroll-behavior:none; }
   .app { max-width:480px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; }
+  .app-body { display:flex; flex-direction:column; flex:1; }
   .header { background:var(--accent); color:white; padding:14px 16px 12px; padding-top:calc(14px + var(--sat)); position:sticky; top:0; z-index:100; }
   .header-top { display:flex; align-items:center; justify-content:space-between; }
   .logo { font-size:18px; font-weight:700; letter-spacing:-0.5px; }
@@ -201,11 +202,13 @@
   ════════════════════════════════════════════════════ */
   @media (min-width: 768px) {
 
-    /* App becomes a two-column layout */
-    .app {
-      max-width: 100%;
+    /* Header spans full width, app-body is the two-column row */
+    .app { max-width: 100%; flex-direction: column; }
+    .app-body {
+      display: flex;
       flex-direction: row;
-      align-items: stretch;
+      flex: 1;
+      min-height: calc(100vh - 60px);
     }
 
     /* ── Sidebar nav ── */
@@ -335,12 +338,18 @@
       </div>
     </div>
   </div>
-  <div class="nav">
-    <div class="ni active" onclick="showTab('dashboard')" id="tab-dashboard"><div class="ni-icon">◼</div>Dashboard</div>
-    <div class="ni" onclick="showTab('receipts')" id="tab-receipts"><div class="ni-icon">☰</div>Receipts</div>
-    <div class="ni hidden" onclick="showTab('team')" id="tab-team"><div class="ni-icon">👥</div>Team</div>
-    <div class="ni" onclick="showTab('scan')" id="tab-scan"><div class="ni-icon">+</div>
-  <div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
+
+  <div class="app-body">
+
+    <div class="nav">
+      <div class="ni active" onclick="showTab('dashboard')" id="tab-dashboard"><div class="ni-icon">◼</div>Dashboard</div>
+      <div class="ni" onclick="showTab('receipts')" id="tab-receipts"><div class="ni-icon">☰</div>Receipts</div>
+      <div class="ni hidden" onclick="showTab('team')" id="tab-team"><div class="ni-icon">👥</div>Team</div>
+      <div class="ni" onclick="showTab('scan')" id="tab-scan"><div class="ni-icon">+</div>Scan / Add</div>
+    </div>
+
+    <div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
+  </div><!-- /app-body -->
 <input type="file" id="file-input" class="hidden" accept="image/*">
 <input type="file" id="import-input" class="hidden" accept=".json">
 
