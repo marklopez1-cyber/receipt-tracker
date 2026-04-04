@@ -1307,40 +1307,15 @@ async function fetchMerchantLogo(storeName) {
 
   const domain = knownDomains[cleaned] || (cleaned.replace(/\s+/g,'') + '.com');
 
-  // Try multiple logo sources in order of quality
-  // 1. Clearbit — highest quality logos, vector-based
-  // 2. Google favicons at high res — reliable fallback
-  const sources = [
-    'https://logo.clearbit.com/' + domain,
-    'https://www.google.com/s2/favicons?domain=' + domain + '&sz=128',
-  ];
-
-  for (const url of sources) {
-    try {
-      const ok = await testLogoUrl(url);
-      if (ok) {
-        logoCache[key] = url;
-        return url;
-      }
-    } catch(e) {}
-  }
-
-  logoCache[key] = null;
-  return null;
+  // Use Google favicon API — CORS-friendly, always returns something
+  // sz=128 gives high quality; Google returns a real favicon or a generic globe
+  // We use the high-res version which tends to have actual brand icons
+  const url = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=128';
+  logoCache[key] = url;
+  return url;
 }
 
-async function testLogoUrl(url) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    // Clearbit returns 400x400 real logos; Google returns 16-128px
-    // Reject tiny images (the generic globe is usually 16x16)
-    img.onload = () => resolve(img.naturalWidth >= 16 && img.naturalHeight >= 16);
-    img.onerror = () => resolve(false);
-    img.src = url;
-    setTimeout(() => resolve(false), 5000);
-  });
-}
+
 
 
 
