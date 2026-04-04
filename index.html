@@ -421,10 +421,36 @@ async function loadOrgMembers() {
 async function loadOrgReceipts() {
   if (!currentOrg || !isAdmin()) return;
   try {
-    const { data, error } = await sb.from('receipts').select('*')
-      .eq('org_id', currentOrg.id).order('created_at', { ascending: false });
-    if (!error && data) receipts = data.map(mapRow);
-  } catch(e) { console.warn('loadOrgReceipts:', e.message); }
+    // Get all active member user_ids in this org
+    const memberUserIds = orgMembers
+      .filter(m => m.status === 'active' && m.user_id)
+      .map(m => m.user_id);
+
+    if (memberUserIds.length === 0) {
+      // Fallback: just show own receipts
+      await loadMyReceipts();
+      return;
+    }
+
+    // Load receipts from ALL active members by user_id
+    // This catches receipts saved before org_id was set
+    const { data, error } = await sb.from('receipts')
+      .select('*')
+      .in('user_id', memberUserIds)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      receipts = data.map(row => ({
+        ...mapRow(row),
+        // Tag submitter email from org members list if not already set
+        submittedBy: row.submitted_by_email ||
+          orgMembers.find(m => m.user_id === row.user_id)?.email || null
+      }));
+    }
+  } catch(e) {
+    console.warn('loadOrgReceipts:', e.message);
+    await loadMyReceipts();
+  }
 }
 
 async function loadMyReceipts() {
