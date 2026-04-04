@@ -193,6 +193,128 @@
   .settings-user-id { font-size:10px; color:var(--text3); margin-top:4px; font-family:monospace; word-break:break-all; }
   .settings-user-tier { display:inline-block; margin-top:6px; }
   .hidden { display:none; }
+
+  /* ── Responsive / Desktop Layout ─────────────────────────────── */
+  @media (min-width: 768px) {
+    .app { max-width: 100%; flex-direction: row; align-items: stretch; }
+
+    /* Sidebar nav on left */
+    .nav {
+      flex-direction: column;
+      width: 200px;
+      min-width: 200px;
+      border-bottom: none;
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      overflow-y: auto;
+      padding-top: 10px;
+    }
+    .ni {
+      flex: none;
+      text-align: left;
+      padding: 12px 20px;
+      font-size: 13px;
+      border-bottom: none;
+      border-left: 3px solid transparent;
+      border-radius: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .ni.active {
+      border-bottom-color: transparent;
+      border-left-color: var(--accent);
+      background: var(--accent-light);
+    }
+    .ni-icon { font-size: 16px; margin-bottom: 0; }
+
+    /* Main area */
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Header full width */
+    .header { position: sticky; top: 0; z-index: 100; }
+
+    /* Content area wider */
+    .content {
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 32px;
+      padding-bottom: 40px;
+    }
+
+    /* Dashboard grid — 4 cols on desktop */
+    .grid2 { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+    /* Receipt cards — 2 columns on desktop */
+    .receipts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* Modals centered on desktop */
+    .overlay { align-items: center; justify-content: center; }
+    .modal {
+      border-radius: 16px;
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+    }
+
+    /* Bottom total bar becomes top bar on desktop */
+    .tbar {
+      position: static;
+      transform: none;
+      left: auto;
+      max-width: 100%;
+      border-top: none;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 32px;
+    }
+
+    /* Scan area wider */
+    .scanarea { padding: 40px 24px; }
+
+    /* Form rows */
+    .frow { grid-template-columns: 1fr 1fr; }
+
+    /* Category bars — 2 col on desktop */
+    .catbars {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 20px;
+    }
+
+    /* Auth screen */
+    .auth-box { max-width: 440px; }
+
+    /* Card values bigger */
+    .cval { font-size: 24px; }
+    .rcname { font-size: 15px; }
+    .rcamt { font-size: 18px; }
+
+    /* Scan preview image taller */
+    .preview { max-height: 320px; }
+    .mimg { max-height: 360px; }
+  }
+
+  @media (min-width: 1100px) {
+    .nav { width: 220px; min-width: 220px; }
+    .content { max-width: 1000px; padding: 28px 40px; }
+    .grid2 { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .receipts-grid { grid-template-columns: 1fr 1fr 1fr; }
+    .catbars { grid-template-columns: 1fr 1fr; gap: 0 32px; }
+    .modal { max-width: 580px; }
+  }
   .install-banner { background:#1a3d17; color:white; padding:10px 14px; font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .install-banner button { background:white; color:var(--accent); border:none; border-radius:5px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; flex-shrink:0; }
 </style>
@@ -214,7 +336,7 @@
     <div class="ni hidden" onclick="showTab('team')" id="tab-team"><div class="ni-icon">👥</div>Team</div>
     <div class="ni" onclick="showTab('scan')" id="tab-scan"><div class="ni-icon">+</div>Scan / Add</div>
   </div>
-  <div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
+  <div class="main-area"><div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
 </div>
 <input type="file" id="file-input" class="hidden" accept="image/*">
 <input type="file" id="import-input" class="hidden" accept=".json">
@@ -1653,7 +1775,7 @@ function renderDash() {
     <div class="crtop"><div class="crname"><div class="dot" style="background:${CATC[c]}"></div>${c}</div><div class="cramount">${fmt(ct[c])}</div></div>
     <div class="barbg"><div class="barfill" style="width:${(ct[c]/max*100).toFixed(1)}%;background:${CATC[c]}"></div></div>
   </div>`).join('')}</div>
-  ${rec.length?`<div class="sec">Recent Receipts</div>${rec.map(rcCard).join('')}`:''}
+  ${rec.length?`<div class="sec">Recent Receipts</div><div class="receipts-grid">${rec.map(rcCard).join('')}</div>`:''}
   ${!receipts.length?`<div class="empty"><div class="empty-icon">🧾</div><div class="empty-title">No receipts yet</div><div class="empty-sub">Tap <strong>Scan / Add</strong> to get started.</div></div>`:''}`;
 }
 
@@ -1662,8 +1784,9 @@ function renderList() {
   const sorted=[...fil].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
   return `
   <div class="filters">${['All',...CATS].map(f=>`<button class="chip${currentFilter===f?' active':''}" onclick="setFilter('${f}')">${f}</button>`).join('')}</div>
-  ${sorted.length?sorted.map(rcCard).join(''):`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in "${currentFilter}"</div></div>`}
-  <div class="tbar"><div class="tlabel">Total (${fil.length})</div><div class="tval">${fmt(sum(fil))}</div></div>`;
+  <div class="receipts-grid">${sorted.length?sorted.map(rcCard).join(''):`<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in "${currentFilter}"</div></div>`}</div>
+  <div class="tbar"><div class="tlabel">Total (${fil.length})</div>
+</div><div class="tval">${fmt(sum(fil))}</div></div>`;
 }
 
 function rcCard(r) {
