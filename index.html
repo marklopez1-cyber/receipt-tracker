@@ -195,109 +195,6 @@
   .hidden { display:none; }
 
   /* ── Responsive / Desktop Layout ─────────────────────────────── */
-  @media (min-width: 768px) {
-    /* App becomes a sidebar + main layout */
-    .app { max-width: 100%; flex-direction: row; align-items: stretch; min-height: 100vh; }
-    .desktop-nav-logo { display: block !important; }
-
-    /* ── Sidebar ── */
-    .nav {
-      flex-direction: column;
-      width: 64px;
-      min-width: 64px;
-      border-bottom: none;
-      border-right: 1px solid var(--border);
-      height: 100vh;
-      position: sticky;
-      top: 0;
-      overflow: hidden;
-      background: var(--surface);
-      z-index: 90;
-    }
-    .ni {
-      flex: none;
-      text-align: left;
-      padding: 12px 20px;
-      font-size: 13px;
-      border-bottom: none;
-      border-left: 3px solid transparent;
-      display: flex;
-      align-items: center;
-      gap: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      color: var(--text2);
-      transition: background 0.15s;
-    }
-    .ni.active {
-      border-bottom-color: transparent;
-      border-left-color: var(--accent);
-      background: var(--accent-light);
-      color: var(--accent);
-      font-weight: 600;
-    }
-    .ni:hover { background: var(--surface2); color: var(--text); }
-    .ni-icon { font-size: 18px; margin-bottom: 0; flex-shrink: 0; width: 22px; text-align: center; }
-
-    /* ── Main area (header + content) ── */
-    .main-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      overflow: hidden;
-      min-width: 0;
-    }
-
-    /* Header sits inside main area */
-    .header { position: sticky; top: 0; z-index: 100; }
-
-    /* Content */
-    .content {
-      max-width: 900px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 24px 32px;
-      padding-bottom: 40px;
-    }
-
-    /* 4-col stat grid */
-    .grid2 { grid-template-columns: repeat(4, 1fr); gap: 12px; }
-
-    /* 2-col receipt cards */
-    .receipts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-    /* Centered modals */
-    .overlay { align-items: center; justify-content: center; }
-    .modal { border-radius: 16px; width: 100%; max-width: 520px; max-height: 90vh; }
-
-    /* Total bar inline (not fixed) */
-    .tbar {
-      position: static;
-      transform: none;
-      left: auto;
-      max-width: 100%;
-      border-top: none;
-      border-bottom: 1px solid var(--border);
-      padding: 10px 32px;
-    }
-
-    /* Scan */
-    .scanarea { padding: 40px 24px; }
-    .frow { grid-template-columns: 1fr 1fr; }
-    .catbars { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
-    .auth-box { max-width: 440px; }
-    .cval { font-size: 24px; }
-    .preview { max-height: 320px; }
-    .mimg { max-height: 360px; }
-  }
-
-  @media (min-width: 1100px) {
-    .content { max-width: 1040px; padding: 28px 40px; }
-    .receipts-grid { grid-template-columns: 1fr 1fr 1fr; }
-    .catbars { gap: 0 32px; }
-    .modal { max-width: 580px; }
-  }
   .install-banner { background:#1a3d17; color:white; padding:10px 14px; font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .install-banner button { background:white; color:var(--accent); border:none; border-radius:5px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; flex-shrink:0; }
 </style>
@@ -308,20 +205,19 @@
   
     </div>
   </div>
+  <div class="header">
+    <div class="header-top">
+      <div class="logo">ReceiptTrack <small>Expense Manager</small></div>
+      <div class="hbtns">
+        <button class="hbtn" onclick="showSettings()">⚙ Settings</button>
+      </div>
   <div class="nav">
-    <div class="desktop-nav-logo" style="padding:16px 20px 8px;white-space:nowrap;overflow:hidden;border-bottom:1px solid var(--border);margin-bottom:8px;font-weight:700;font-size:15px;color:var(--accent);display:none">🧾 ReceiptTrack</div>
     <div class="ni active" onclick="showTab('dashboard')" id="tab-dashboard"><div class="ni-icon">◼</div>Dashboard</div>
     <div class="ni" onclick="showTab('receipts')" id="tab-receipts"><div class="ni-icon">☰</div>Receipts</div>
     <div class="ni hidden" onclick="showTab('team')" id="tab-team"><div class="ni-icon">👥</div>Team</div>
     <div class="ni" onclick="showTab('scan')" id="tab-scan"><div class="ni-icon">+</div>Scan / Add</div>
   </div>
-  <div class="main-area"><div class="header">
-    <div class="header-top">
-      <div class="logo">ReceiptTrack <small>Expense Manager</small></div>
-      <div class="hbtns">
-        <button class="hbtn" onclick="showSettings()">⚙ Settings</button>
-      </div><div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
-</div>
+  <div class="content" id="content"><div class="empty"><div class="empty-icon">🧾</div><div>Loading…</div></div></div>
 <input type="file" id="file-input" class="hidden" accept="image/*">
 <input type="file" id="import-input" class="hidden" accept=".json">
 
@@ -1759,7 +1655,7 @@ function renderDash() {
     <div class="crtop"><div class="crname"><div class="dot" style="background:${CATC[c]}"></div>${c}</div><div class="cramount">${fmt(ct[c])}</div></div>
     <div class="barbg"><div class="barfill" style="width:${(ct[c]/max*100).toFixed(1)}%;background:${CATC[c]}"></div></div>
   </div>`).join('')}</div>
-  ${rec.length?`<div class="sec">Recent Receipts</div><div class="receipts-grid">${rec.map(rcCard).join('')}</div>`:''}
+  ${rec.length?`<div class="sec">Recent Receipts</div>${rec.map(rcCard).join('')}`:''}
   ${!receipts.length?`<div class="empty"><div class="empty-icon">🧾</div><div class="empty-title">No receipts yet</div><div class="empty-sub">Tap <strong>Scan / Add</strong> to get started.</div></div>`:''}`;
 }
 
@@ -1768,7 +1664,7 @@ function renderList() {
   const sorted=[...fil].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
   return `
   <div class="filters">${['All',...CATS].map(f=>`<button class="chip${currentFilter===f?' active':''}" onclick="setFilter('${f}')">${f}</button>`).join('')}</div>
-  <div class="receipts-grid">${sorted.length?sorted.map(rcCard).join(''):`<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in "${currentFilter}"</div></div>`}</div>
+  ${sorted.length?sorted.map(rcCard).join(''):`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">No receipts in "${currentFilter}"</div></div>`}
   <div class="tbar"><div class="tlabel">Total (${fil.length})</div>
 </div><div class="tval">${fmt(sum(fil))}</div></div>`;
 }
