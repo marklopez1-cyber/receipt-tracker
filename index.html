@@ -1527,7 +1527,7 @@ function renderDash() {
   return `
   ${renderTierBar()}
   ${adminBanner}
-  ${!apiKey?`<div class="sb warn"><span>⚙</span><div>AI scanning inactive — tap <strong>⚙ API</strong> to add your Anthropic API key.</div></div>`:''}
+  ${!apiKey?`<div class="sb warn"><span>⚙</span><div>AI scanning inactive — tap <strong>⚙ Settings</strong> to enter your Product Key.</div></div>`:''}
   <div class="grid2">
     <div class="card accent"><div class="clabel">Total Spent</div><div class="cval">${fmt(tot)}</div></div>
     <div class="card"><div class="clabel">This Month</div><div class="cval">${fmt(mTot)}</div></div>
@@ -1579,7 +1579,7 @@ function renderScan() {
     <div>${scanStatus.msg}</div>
   </div>`:'';
   return `
-  ${!apiKey?`<div class="sb warn"><span>⚠</span><div>AI scanning needs an API key. <span style="text-decoration:underline;cursor:pointer" onclick="showApiSetup()">Tap to set it up</span> or fill in manually.</div></div>`:''}
+  ${!apiKey?`<div class="sb warn"><span>⚠</span><div>AI scanning needs a Product Key. <span style="text-decoration:underline;cursor:pointer" onclick="showProductKey()">Tap to activate</span> or fill in manually.</div></div>`:''}
   ${pendingImage
     ?`<img class="preview" src="${pendingImage}" alt="Receipt">
       ${apiKey?`<button class="btn btn-s btn-full" style="margin-bottom:11px" onclick="scanWithAI()">🔄 Re-scan with AI</button>`:''}`
@@ -1635,7 +1635,7 @@ function onFileSelect(e) {
     pendingB64=ev.target.result.split(',')[1];
     scanStatus=null; render();
     if(apiKey) scanWithAI();
-    else{scanStatus={type:'warn',msg:'No API key — fill details manually or tap ⚙ API to enable scanning.'};render();}
+    else{scanStatus={type:'warn',msg:'No Product Key — fill details manually or tap ⚙ Settings to activate.'};render();}
   };
   reader.readAsDataURL(file);
   e.target.value='';
@@ -1705,7 +1705,7 @@ Respond ONLY with raw JSON, no markdown, no extra text:
     if(!resp.ok){
       const err=await resp.json().catch(()=>({}));
       scanStatus=resp.status===401
-        ?{type:'error',msg:'Invalid API key (401). Check your key in ⚙ API settings.'}
+        ?{type:'error',msg:'Invalid Product Key (401). Check your activation key in ⚙ Settings.'}
         :{type:'error',msg:`API error ${resp.status}: ${err?.error?.message||''}`};
       render();return;
     }
@@ -2095,14 +2095,14 @@ function showProductKey() {
 }
 async function applyKey() {
   const v=document.getElementById('api-in')?.value?.trim();
-  if(!v){alert('Please paste your API key.');return;}
-  if(!v.startsWith('sk-')){alert('Key should start with "sk-ant-". Please check and retry.');return;}
+  if(!v){alert('Please paste your activation key.');return;}
+  if(!v.startsWith('sk-')){alert('Invalid activation key. Please check and retry.');return;}
   await storeKey(v);
   document.querySelector('.overlay')?.remove(); render();
-  alert('✓ API key saved! Upload a receipt to test AI scanning.');
+  alert('✓ Product Key activated! Upload a receipt to test AI scanning.');
 }
 async function clearKey() {
-  if(!confirm('Remove API key from this device?')) return;
+  if(!confirm('Deactivate Product Key on this device?')) return;
   await storeKey('');
   document.querySelector('.overlay')?.remove(); render();
 }
@@ -2113,7 +2113,7 @@ function showBackup() {
   const ov=document.createElement('div'); ov.className='overlay';
   ov.innerHTML=`<div class="modal">
     <div class="mhead"><div class="mtitle">☁ Backup & Restore</div><button class="mclose" onclick="this.closest('.overlay').remove()">✕</button></div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:13px">Export a full backup including all receipt photos. Use this to keep a copy or transfer to another device. Your API key is not included in backups.</p>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:13px">Export a full backup including all receipt photos. Use this to keep a copy or transfer to another device. Your Product Key is not included in backups.</p>
     <div class="sb warn" style="margin-bottom:13px"><span>💡</span><div style="font-size:12px">Backups include photos so file size may be large. Save to iCloud Drive, Google Drive, or email to yourself.</div></div>
     <div class="bkrow">
       <button class="btn btn-s" onclick="doExport()">⬇ Export Backup</button>
