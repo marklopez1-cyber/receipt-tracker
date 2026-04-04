@@ -1783,7 +1783,7 @@ async function doSave() {
   const payType  = editForm.paymentType || '';
   const last4    = editForm.cardLast4   || '';
   const cardType = editForm.cardType    || '';
-  const r={id:Date.now().toString(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,createdAt:new Date().toISOString(),orgId:currentOrg?.id||null,submittedBy:currentUser?.email||null};
+  const r={id:crypto.randomUUID(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,createdAt:new Date().toISOString(),orgId:currentOrg?.id||null,submittedBy:currentUser?.email||null};
   await persistReceipt(r);
   pendingImage=null;pendingB64=null;scanStatus=null;
   editForm={store:'',date:'',amount:'',tax:'',paymentType:'',cardLast4:'',cardType:'',category:'Fuel',notes:''};
