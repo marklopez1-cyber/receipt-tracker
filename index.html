@@ -479,6 +479,7 @@ async function loadMyReceipts() {
     .select('*')
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false });
+  console.log('[loadMyReceipts] user:', currentUser.email, 'rows:', data?.length, 'error:', JSON.stringify(error));
   if (!error && data) receipts = data.map(mapRow);
 }
 
