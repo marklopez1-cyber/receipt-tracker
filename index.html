@@ -381,7 +381,7 @@ async function saveReceiptToSupabase(r) {
     notes: r.notes || '',
     logo_url: r.logoUrl || null,
     org_id: currentOrg ? currentOrg.id : null,
-    submitted_by_email: currentUser.email || null,
+    submitted_by_email: r.submittedBy || r.submitted_by_email || currentUser.email || null,
     created_at: r.createdAt
   };
   const { error } = await sb.from('receipts').upsert(row);
@@ -1100,8 +1100,6 @@ function logoHtml(r, size=32) {
 }
 
 async function attachLogos(rList) {
-  // Process in small batches to avoid blocking UI
-  // Re-fetch logo for ANY receipt missing a logoUrl regardless of whether it was scanned before
   const missing = rList.filter(r => r.store && !r.logoUrl);
   if (missing.length === 0) return;
 
@@ -1110,15 +1108,13 @@ async function attachLogos(rList) {
       const url = await fetchMerchantLogo(r.store);
       if (url) {
         r.logoUrl = url;
-        // Save to IndexedDB
+        // Only save logo to IndexedDB — never re-save to Supabase here
+        // (would overwrite submitted_by_email with wrong user)
         try { await dbPut('receipts', r); } catch(e) {}
-        // Save to Supabase so it persists across devices
-        try { await saveReceiptToSupabase(r); } catch(e) {}
-        // Re-render so logo appears immediately as each one loads
-        render();
+        // Only re-render if we're not in admin view (avoid overwriting toggled state)
+        if (!adminViewAll) render();
       }
     } catch(e) {}
-    // Small delay between fetches to avoid hammering APIs
     await new Promise(res => setTimeout(res, 300));
   }
 }
