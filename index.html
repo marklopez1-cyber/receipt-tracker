@@ -194,6 +194,42 @@
   .settings-user-tier { display:inline-block; margin-top:6px; }
   .hidden { display:none; }
 
+  @media (min-width: 768px) {
+    .app { max-width:100%; flex-direction:row; }
+    .nav {
+      flex-direction:column;
+      width:180px;
+      min-width:180px;
+      height:100vh;
+      position:sticky;
+      top:0;
+      border-bottom:none;
+      border-right:1px solid var(--border);
+      overflow-y:auto;
+      flex-shrink:0;
+    }
+    .ni {
+      flex:none;
+      text-align:left;
+      padding:12px 18px;
+      border-bottom:none;
+      border-left:3px solid transparent;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:13px;
+    }
+    .ni.active { border-bottom-color:transparent; border-left-color:var(--accent); }
+    .ni-icon { font-size:16px; margin-bottom:0; }
+    .content { max-width:900px; margin:0 auto; padding:20px 28px; padding-bottom:40px; }
+    .grid2 { grid-template-columns:repeat(4,1fr); gap:12px; }
+    .overlay { align-items:center; justify-content:center; }
+    .modal { border-radius:16px; max-width:520px; max-height:90vh; }
+    .tbar { position:static; transform:none; left:auto; max-width:100%; border-top:none; border-bottom:1px solid var(--border); }
+    .frow { grid-template-columns:1fr 1fr; }
+    .catbars { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
+  }
+
   /* ── Responsive / Desktop Layout ─────────────────────────────── */
   .install-banner { background:#1a3d17; color:white; padding:10px 14px; font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .install-banner button { background:white; color:var(--accent); border:none; border-radius:5px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; flex-shrink:0; }
