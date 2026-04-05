@@ -1230,7 +1230,7 @@ async function fetchMerchantLogo(storeName) {
     jiffy:'jiffylube.com', jiffylube:'jiffylube.com', firestone:'firestone.com',
     mavis:'mavistiresbrakes.com', midas:'midas.com',
     // Hardware & Home
-    homedepot:'homedepot.com', lowes:'lowes.com', menards:'menards.com',
+    homedepot:'homedepot.com', lowes:'lowes.com', loweshome:'lowes.com', lowesgarden:'lowes.com', menards:'menards.com',
     acehardware:'acehardware.com', truvalue:'truevalue.com',
     truevalue:'truevalue.com', harbor:'harborfreight.com',
     harborfreight:'harborfreight.com', fastenal:'fastenal.com',
@@ -1312,10 +1312,10 @@ async function fetchMerchantLogo(storeName) {
 
   const domain = knownDomains[cleaned] || (cleaned.replace(/\s+/g,'') + '.com');
 
-  // Use Google favicon API — CORS-friendly, always returns something
-  // sz=128 gives high quality; Google returns a real favicon or a generic globe
-  // We use the high-res version which tends to have actual brand icons
-  const url = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=128';
+  // Use DuckDuckGo favicon API as primary — returns real brand icons, no 404s
+  // Falls back to Google high-res favicon
+  // DDG returns actual logos for most major brands
+  const url = 'https://icons.duckduckgo.com/ip3/' + domain + '.ico';
   logoCache[key] = url;
   return url;
 }
@@ -1333,7 +1333,8 @@ function logoHtml(r, size=32) {
   if (!r.logoUrl) {
     return '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:' + r4 + 'px;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:' + sz2 + 'px;font-weight:700;color:white;flex-shrink:0;font-family:sans-serif">' + letter + '</div>';
   }
-  return '<img data-logo="1" src="' + r.logoUrl + '" width="' + sz + '" height="' + sz + '" style="border-radius:' + r4 + 'px;object-fit:contain;background:white;border:1px solid var(--border);flex-shrink:0">';
+  const googleFallback = 'https://www.google.com/s2/favicons?domain=' + (r.logoUrl||'').replace('https://icons.duckduckgo.com/ip3/','').replace('.ico','') + '&sz=128';
+  return '<img data-logo="1" src="' + r.logoUrl + '" width="' + sz + '" height="' + sz + '" style="border-radius:' + r4 + 'px;object-fit:contain;background:white;border:1px solid var(--border);flex-shrink:0" onerror="if(this.dataset.retry!==\'1\'){this.dataset.retry=\'1\';this.src=\''+googleFallback+'\'}else{this.style.display=\'none\';}">';
 }
 
 async function attachLogos(rList) {
