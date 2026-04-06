@@ -1402,10 +1402,7 @@ async function init() {
   // Load local settings (API key)
   try {
     await openDB();
-    apiKey = (await dbGet('settings','apiKey')) || '';
-  } catch(e) {
-    apiKey = localStorage.getItem('rt_apikey')||'';
-  }
+  } catch(e) {}
 
   // Listen for Supabase auth events (handles PKCE recovery flow)
   sb.auth.onAuthStateChange((event, session) => {
@@ -1846,7 +1843,7 @@ function renderDash() {
   return `
   ${renderTierBar()}
   ${adminBanner}
-  ${!apiKey?`<div class="sb warn"><span>⚙</span><div>AI scanning inactive — tap <strong>⚙ Settings</strong> to enter your Product Key.</div></div>`:''}
+
   <div class="grid2">
     <div class="card accent"><div class="clabel">Total Spent</div><div class="cval">${fmt(tot)}</div></div>
     <div class="card"><div class="clabel">This Month</div><div class="cval">${fmt(mTot)}</div></div>
@@ -1899,10 +1896,10 @@ function renderScan() {
     <div>${scanStatus.msg}</div>
   </div>`:'';
   return `
-  ${!apiKey?`<div class="sb warn"><span>⚠</span><div>AI scanning needs a Product Key. <span style="text-decoration:underline;cursor:pointer" onclick="showProductKey()">Tap to activate</span> or fill in manually.</div></div>`:''}
+
   ${pendingImage
     ?`<img class="preview" src="${pendingImage}" alt="Receipt">
-      ${apiKey?`<button class="btn btn-s btn-full" style="margin-bottom:11px" onclick="scanWithAI()">🔄 Re-scan with AI</button>`:''}`
+      <button class="btn btn-s btn-full" style="margin-bottom:11px" onclick="scanWithAI()">🔄 Re-scan with AI</button>`
     :`<div class="scanarea" onclick="openPicker(null)">
         <div class="scan-icon">📷</div>
         <div class="scan-text">Upload or photograph a receipt</div>
@@ -1955,8 +1952,7 @@ function onFileSelect(e) {
     pendingMime=mm?mm[1]:'image/jpeg';
     pendingB64=ev.target.result.split(',')[1];
     scanStatus=null; render();
-    if(apiKey) scanWithAI();
-    else{scanStatus={type:'warn',msg:'No Product Key — fill details manually or tap ⚙ Settings to activate.'};render();}
+    scanWithAI();
   };
   reader.readAsDataURL(file);
   e.target.value='';
@@ -2021,7 +2017,7 @@ async function verifyCanScanServerSide() {
 
 async function scanWithAI() {
   capForm();
-  if(!pendingB64||!apiKey) return;
+  if(!pendingB64) return;
 
   // Enforce scan limit — verify against Supabase (can't be bypassed via DevTools)
   if (!await verifyCanScanServerSide()) return;
@@ -2044,11 +2040,19 @@ async function scanWithAI() {
   lastScanTime = Date.now();
   scanStatus={type:'scanning',msg:'AI is reading your receipt…'}; render();
   try {
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { scanStatus={type:'error',msg:'Please sign in to scan.'}; render(); return; }
+
+    const resp=await fetch('https://receipt-invite-production.up.railway.app/scan',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer ' + session.access_token,
+        'apikey': SUPABASE_KEY,
+      },
       body:JSON.stringify({
-        model:'claude-opus-4-5',max_tokens:512,
+        image: pendingB64,
+        mimeType: pendingMime,
         messages:[{role:'user',content:[
           {type:'image',source:{type:'base64',media_type:pendingMime,data:pendingB64}},
           {type:'text',text:`You are an OCR assistant. Look at this receipt and extract:
@@ -2072,9 +2076,11 @@ Respond ONLY with raw JSON, no markdown, no extra text:
     });
     if(!resp.ok){
       const err=await resp.json().catch(()=>({}));
-      scanStatus=resp.status===401
-        ?{type:'error',msg:'Invalid Product Key (401). Check your activation key in ⚙ Settings.'}
-        :{type:'error',msg:`API error ${resp.status}: ${err?.error?.message||''}`};
+      if (resp.status === 429) {
+        showPaywall(err.error || 'You have used all your scans this month.');
+        scanStatus = null; render(); return;
+      }
+      scanStatus={type:'error',msg:`Scan error ${resp.status}: ${err?.error||err?.error?.message||'Please try again.'}`};
       render();return;
     }
     const data=await resp.json();
@@ -2375,7 +2381,7 @@ function showSettings() {
   const isStandalone = window.matchMedia('(display-mode:standalone)').matches || navigator.standalone;
 
   const items = [
-    { icon:'🔑', title:'Product Key', sub: apiKey ? '✓ Active · ' + TIERS[userTier].scansPerMonth + ' scans/mo' : 'Activate your plan key', action:'showProductKey()' },
+
     { icon:'☁',  title:'Backup & Restore', sub:'Export or import your receipts',     action:'showBackup()' },
     { icon:'⬇',  title:'Export to Excel',  sub:'Download all receipts as .xlsx',     action:'exportToExcel()' },
     userTier === 'free' ? { icon:'⭐', title:'Upgrade Plan', sub:'View Pro & Business plans', action:'showPricing()' } : null,
@@ -2407,7 +2413,7 @@ function showSettings() {
     + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
     + '<div class="settings-user">'
     + '<div class="settings-user-email">👤 ' + email + '</div>'
-    + '<div class="settings-user-id">ID: ' + uid + '</div>'
+
     + '<div class="settings-user-tier">' + tierPill + '</div>'
     + '</div>'
     + itemsHtml
@@ -2425,63 +2431,10 @@ function showSettings() {
   document.body.appendChild(ov);
 }
 
-function showApiSetup() { showProductKey(); }
-
-function showProductKey() {
-  const productKey = generateProductKey(currentUser?.id, userTier);
-  const tierInfo   = TIERS[userTier];
-  const ov = document.createElement('div'); ov.className = 'overlay';
-  ov.innerHTML = '<div class="modal">'
-    + '<div class="mhead"><div class="mtitle">🔑 Product Key</div>'
-    + '<button class="mclose" onclick="this.closest(\'.overlay\').remove()">✕</button></div>'
-    // Plan badge
-    + '<div style="background:var(--surface2);border-radius:var(--r);padding:14px;margin-bottom:14px">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    + '<div style="font-weight:700;font-size:15px">' + tierInfo.name + ' Plan</div>'
-    + '<span class="tier-pill ' + userTier + '">' + tierInfo.name + '</span>'
-    + '</div>'
-    + '<div style="font-size:12px;color:var(--text2);line-height:1.8">'
-    + '✓ ' + tierInfo.scansPerMonth + ' AI scans / month<br>'
-    + (tierInfo.excel ? '✓ Excel export<br>' : '')
-    + (tierInfo.backup ? '✓ Backup & restore<br>' : '')
-    + '</div>'
-    + '</div>'
-    // Product key display
-    + '<div style="margin-bottom:14px">'
-    + '<label class="fl">Your Product Key</label>'
-    + '<div style="background:var(--surface2);border-radius:var(--rs);padding:12px 14px;font-family:monospace;font-size:14px;letter-spacing:1px;color:var(--accent);word-break:break-all;margin-bottom:6px">'
-    + (productKey || '—')
-    + '</div>'
-    + '<div style="font-size:11px;color:var(--text3)">This key is tied to your account and plan. Keep it private.</div>'
-    + '</div>'
-    // Scan key input (hidden as "activation key" UX but stores the real Anthropic key)
-    + '<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">'
-    + '<label class="fl">Activation Key</label>'
-    + '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Enter the activation key provided in your welcome email to enable AI scanning.</div>'
-    + '<div class="keyrow">'
-    + '<input class="fi" id="api-in" type="password" placeholder="sk-ant-…" value="' + apiKey + '" autocomplete="off">'
-    + '<button class="btn btn-p" onclick="applyKey()">Activate</button>'
-    + '</div>'
-    + (apiKey ? '<div style="color:var(--accent);font-size:12px;margin-top:8px">✓ AI scanning active</div>'
-              + '<button class="btn btn-d btn-full" style="margin-top:8px" onclick="clearKey()">Deactivate</button>' : '')
-    + '</div>'
-    + '</div>';
-  ov.onclick = e => { if (e.target === ov) ov.remove(); };
-  document.body.appendChild(ov);
-}
-async function applyKey() {
-  const v=document.getElementById('api-in')?.value?.trim();
-  if(!v){alert('Please paste your activation key.');return;}
-  if(!v.startsWith('sk-')){alert('Invalid activation key. Please check and retry.');return;}
-  await storeKey(v);
-  document.querySelector('.overlay')?.remove(); render();
-  alert('✓ Product Key activated! Upload a receipt to test AI scanning.');
-}
-async function clearKey() {
-  if(!confirm('Deactivate Product Key on this device?')) return;
-  await storeKey('');
-  document.querySelector('.overlay')?.remove(); render();
-}
+function showApiSetup() { /* no-op — using Railway scan proxy */ }
+function showProductKey() { /* no-op — using Railway scan proxy */ }
+async function applyKey() { /* no-op — using Railway scan proxy */ }
+async function clearKey()  { /* no-op — using Railway scan proxy */ }
 
 // ── Backup / Restore ───────────────────────────────────────────────
 function showBackup() {
