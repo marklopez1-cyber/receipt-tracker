@@ -1123,6 +1123,7 @@ async function onAuthSuccess() {
   const urlParams = new URLSearchParams(window.location.search);
   const inviteOrgId = urlParams.get('invite_org');
   if (inviteOrgId) { await acceptInvite(inviteOrgId); history.replaceState({}, '', window.location.pathname); }
+  await handleStripeReturn(); // handle ?payment=success return from Stripe
   await loadMyReceipts();
   showTab('dashboard');
   // Auto-refresh logos for any receipts missing them
@@ -1701,17 +1702,87 @@ function showUpgradeModal() {
 function showPricing() { showPaywall(); }
 
 async function simulateUpgrade(tier, btn) {
-  // ── INTEGRATION POINT ──────────────────────────────────────────
-  // Replace this function body with your real payment processor:
-  // RevenueCat, Stripe, Apple IAP, or Google Play Billing.
-  // On successful payment, call: await onUpgradeSuccess(tier)
-  // ──────────────────────────────────────────────────────────────
-  const names = { pro:'Pro ($7.99/mo)', business:'Business ($19.99/mo)' };
-  if (confirm('Plan: ' + names[tier] + '\n\n[Tap OK to confirm upgrade]')) {
-    btn.disabled = true;
-    btn.textContent = 'Upgrading…';
-    await onUpgradeSuccess(tier);
-    btn.closest('.overlay')?.remove();
+  // ── Stripe Checkout ─────────────────────────────────────────────
+  if (!currentUser) { alert('Please sign in first.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Redirecting…'; }
+
+  try {
+    const res = await fetch('https://receipt-invite-production.up.railway.app/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tier,
+        userId:    currentUser.id,
+        userEmail: currentUser.email,
+      }),
+    });
+
+    const data = await res.json();
+    console.log('[Stripe] response:', res.status, data);
+    if (!res.ok || !data.url) {
+      alert('Checkout error: ' + (data.error || 'No URL returned. Status: ' + res.status));
+      if (btn) { btn.disabled = false; btn.textContent = 'Upgrade'; }
+      return;
+    }
+
+    // Redirect to Stripe hosted checkout page
+    window.location.href = data.url;
+
+  } catch(e) {
+    console.error('[Stripe] fetch error:', e);
+    alert('Network error: ' + e.message + '\n\nCheck browser console for details.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Upgrade'; }
+  }
+}
+
+// ── Handle return from Stripe Checkout ─────────────────────────────────────
+async function handleStripeReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const payment = params.get('payment');
+  const tier    = params.get('tier');
+
+  if (payment === 'success' && tier) {
+    // Clean URL
+    history.replaceState({}, '', window.location.pathname);
+    // Reload subscription from Supabase (webhook already updated it)
+    await loadUserSubscription();
+    await onUpgradeSuccess(userTier);
+    // Show success message
+    const ov = document.createElement('div'); ov.className = 'overlay';
+    ov.innerHTML = '<div class="modal" style="text-align:center;padding:32px 24px">'
+      + '<div style="font-size:48px;margin-bottom:16px">🎉</div>'
+      + '<div style="font-size:20px;font-weight:700;margin-bottom:8px">You\'re on ' + (tier === 'business' ? 'Business' : 'Pro') + '!</div>'
+      + '<div style="font-size:14px;color:var(--text2);margin-bottom:24px">Your subscription is now active.</div>'
+      + '<button class="btn btn-p btn-full" style="padding:14px" onclick="this.closest(\'.overlay\').remove()">Get Started</button>'
+      + '</div>';
+    ov.onclick = e => { if (e.target === ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+
+  if (payment === 'cancelled') {
+    history.replaceState({}, '', window.location.pathname);
+  }
+}
+
+// ── Open Stripe customer portal (manage / cancel subscription) ─────────────
+async function openCustomerPortal() {
+  if (!currentUser) return;
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+
+  try {
+    const res = await fetch('https://receipt-invite-production.up.railway.app/customer-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser.id }),
+    });
+    const data = await res.json();
+    if (data.url) window.location.href = data.url;
+    else alert('Could not open billing portal. Please try again.');
+  } catch(e) {
+    alert('Network error. Please try again.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Manage Subscription'; }
   }
 }
 
@@ -2262,14 +2333,8 @@ function showManageSubscription() {
     // Action buttons
     + '<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">'
     + '<div class="sec" style="margin:0 0 10px">Change Plan</div>'
-    + (tier === 'business'
-        ? '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:8px" onclick="confirmDowngrade(\'pro\')">⬇ Switch to Pro — $7.99/mo</button>'
-        : '')
-    + (tier !== 'free'
-        ? '<button class="btn btn-s btn-full" style="padding:12px;margin-bottom:8px;color:var(--text2)" onclick="confirmDowngrade(\'free\')">⬇ Downgrade to Free</button>'
-        : '')
-    + '<button class="btn btn-d btn-full" style="padding:12px;margin-top:4px" onclick="confirmCancel()">✕ Cancel Subscription</button>'
-    + '<div style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">Cancelling moves you to Free. Your receipts are always kept.</div>'
+    + '<button class="btn btn-p btn-full" style="padding:14px;margin-bottom:10px" onclick="openCustomerPortal()">⚙ Manage Billing on Stripe</button>'
+    + '<div style="font-size:12px;color:var(--text2);text-align:center;line-height:1.6">Update payment, download invoices, or cancel via Stripe portal.</div>'
     + '</div>'
     + '</div>';
 
