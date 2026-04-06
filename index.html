@@ -90,6 +90,7 @@
   .scan-icon { font-size:28px; margin-bottom:7px; }
   .scan-text { font-size:14px; color:var(--text2); margin-bottom:3px; }
   .scan-sub { font-size:12px; color:var(--text3); }
+  .ai-disclaimer { font-size:11px; color:var(--text3); line-height:1.5; margin-top:8px; padding:8px 12px; background:var(--surface2); border-radius:6px; text-align:center; }
   .scan-btns { display:flex; gap:10px; margin-top:12px; justify-content:center; }
   .btn { border:none; border-radius:var(--rs); padding:11px 18px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
   .btn-p { background:var(--accent); color:white; } .btn-p:active { background:var(--accent-mid); }
@@ -968,6 +969,7 @@ function showAuthScreen(mode) {
     isLogin ? '    <div style="text-align:center;margin-top:10px"><span style="font-size:13px;color:var(--info);cursor:pointer;text-decoration:underline" onclick="handleForgotPassword()">Forgot password?</span></div>' : '',
     '  </div>',
     '  <div class="auth-footer">',
+    !isLogin ? '    <div style="font-size:12px;color:var(--text2);line-height:1.6;margin:8px 0 12px;padding:10px 12px;background:var(--surface2);border-radius:8px"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="terms-check" style="margin-top:3px;flex-shrink:0"><span>I agree to the <a href="https://receipts.appdepot.net/terms.html" target="_blank" style="color:var(--accent)">Terms of Service</a> and <a href="https://receipts.appdepot.net/privacy.html" target="_blank" style="color:var(--accent)">Privacy Policy</a>, including limitation of liability and data loss provisions.</span></label></div>' : '',
     '    By continuing you agree to our Terms of Service.<br>',
     '    Your data is encrypted and stored securely.',
     '  </div>',
@@ -1068,6 +1070,10 @@ async function handleAuth(mode) {
 
   if (!email || !password) { showAuthError('Please enter your email and password.'); return; }
   if (mode === 'signup' && password !== confirm) { showAuthError('Passwords do not match.'); return; }
+  if (mode === 'signup' && !document.getElementById('terms-check')?.checked) {
+    showAuthError('Please agree to the Terms of Service and Privacy Policy to continue.');
+    return;
+  }
   if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
 
   btn.disabled = true;
@@ -1901,6 +1907,7 @@ function renderScan() {
         <div class="scan-icon">📷</div>
         <div class="scan-text">Upload or photograph a receipt</div>
         <div class="scan-sub">AI reads store, date &amp; total automatically</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;padding:6px 10px;background:var(--surface2);border-radius:6px;text-align:center">⚠ AI may be inaccurate — verify before use for tax or financial purposes.</div>
         <div class="scan-btns">
           <button class="btn btn-p" onclick="event.stopPropagation();openPicker('environment')">📷 Camera</button>
           <button class="btn btn-s" onclick="event.stopPropagation();openPicker(null)">🖼 Gallery</button>
@@ -2406,6 +2413,14 @@ function showSettings() {
     + itemsHtml
     + '</div>';
 
+  // Legal links
+  const legalDiv = ov.querySelector('.modal');
+  if (legalDiv) {
+    const lf = document.createElement('div');
+    lf.style.cssText = 'text-align:center;padding:14px 0 2px;font-size:11px;color:var(--text3)';
+    lf.innerHTML = '<a href="https://receipts.appdepot.net/terms.html" target="_blank" style="color:var(--text3);margin-right:14px">Terms of Service</a>' + '<a href="https://receipts.appdepot.net/privacy.html" target="_blank" style="color:var(--text3)">Privacy Policy</a>';
+    legalDiv.appendChild(lf);
+  }
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
   document.body.appendChild(ov);
 }
