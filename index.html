@@ -7,7 +7,7 @@
     script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com;
     style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
     img-src 'self' blob: data: https: ;
-    connect-src 'self' https://ecmbporsbhoworqrxodc.supabase.co wss://ecmbporsbhoworqrxodc.supabase.co https://api.anthropic.com https://api.resend.com https://receipt-invite-production.up.railway.app https://cdn.jsdelivr.net;
+    connect-src 'self' https://ecmbporsbhoworqrxodc.supabase.co wss://ecmbporsbhoworqrxodc.supabase.co https://*.supabase.co wss://*.supabase.co https://receipt-invite-production.up.railway.app https://cdn.jsdelivr.net;
     font-src 'self' data: https://cdn.jsdelivr.net;
     worker-src blob:;
     manifest-src blob: 'self';
@@ -460,7 +460,7 @@ async function signIn(email, password) {
 }
 
 async function signOut() {
-  await sb.auth.signOut();
+  await sb.auth.signOut({ scope: 'local' });
   // Reset all state so next login starts clean
   currentUser    = null;
   receipts       = [];
@@ -1028,7 +1028,7 @@ async function handlePasswordReset() {
   }
   // Clear hash and go to login
   window.location.hash = '';
-  await sb.auth.signOut();
+  await sb.auth.signOut({ scope: 'local' });
   const authEl = document.getElementById('auth-screen');
   if (authEl) authEl.remove();
   document.getElementById('app').classList.add('hidden');
@@ -2048,7 +2048,6 @@ async function scanWithAI() {
       headers:{
         'Content-Type':'application/json',
         'Authorization':'Bearer ' + session.access_token,
-        'apikey': SUPABASE_KEY,
       },
       body:JSON.stringify({
         image: pendingB64,
