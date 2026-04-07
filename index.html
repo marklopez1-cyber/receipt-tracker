@@ -519,6 +519,7 @@ async function saveReceiptToSupabase(r) {
     date: r.date || null,
     amount: r.amount || 0,
     tax: r.tax || null,
+    tip: r.tip || null,
     category: r.category || 'Other',
     payment_type: r.paymentType || '',
     card_last4: r.cardLast4 || '',
@@ -624,6 +625,7 @@ function mapRow(row) {
     date:          dateStr,
     amount:        row.amount || 0,
     tax:           row.tax,
+    tip:           row.tip,
     category:      row.category || 'Other',
     paymentType:   row.payment_type || '',
     cardLast4:     row.card_last4 || '',
@@ -1191,7 +1193,7 @@ const SOFT_CAP = 100; // show power-user warning above this
 
 let receipts=[],apiKey='',currentTab='dashboard',currentFilter='All';
 let pendingImage=null,pendingB64=null,pendingMime='image/jpeg';
-let editForm={store:'',date:'',amount:'',tax:'',paymentType:'',cardLast4:'',cardType:'',category:'Fuel',notes:''};
+let editForm={store:'',date:'',amount:'',tax:'',tip:'',paymentType:'',cardLast4:'',cardType:'',category:'Fuel',notes:''};
 let scanStatus=null;
 let userTier='free'; // 'free' | 'pro' | 'business'  — set from billing system
 let scansThisMonth=0;
@@ -1922,6 +1924,8 @@ function renderScan() {
   </div>
   <div class="fg"><label class="fl">Tax Amount ($)</label>
     <input class="fi" id="f-tax" type="number" step="0.01" min="0" placeholder="0.00" value="${eA(editForm.tax)}" inputmode="decimal"></div>
+  <div class="fg"><label class="fl">Tip Amount ($)</label>
+    <input class="fi" id="f-tip" type="number" step="0.01" min="0" placeholder="0.00" value="${eA(editForm.tip)}" inputmode="decimal"></div>
   <div class="fg"><label class="fl">Category</label>
     <select class="fsel" id="f-category">${CATS.map(c=>`<option${editForm.category===c?' selected':''}>${c}</option>`).join('')}</select></div>
   <div class="fg"><label class="fl">Payment Method</label>
@@ -1972,6 +1976,7 @@ function capForm() {
   editForm.cardType    = document.getElementById('f-cardtype')?.value    ?? editForm.cardType;
   editForm.category    = document.getElementById('f-category')?.value    ?? editForm.category;
   editForm.notes       = document.getElementById('f-notes')?.value       ?? editForm.notes;
+  editForm.tip         = document.getElementById('f-tip')?.value          ?? editForm.tip;
 }
 async function verifyCanScanServerSide() {
   // Re-fetch scan count from Supabase on every scan attempt
@@ -2062,6 +2067,7 @@ async function scanWithAI() {
 2. date: transaction date in YYYY-MM-DD format
 3. total: the final total as a plain number (no $ or commas)
 4. tax: the tax amount as a plain number (no $ or commas), empty string if not found
+5. tip: the tip or gratuity amount as a plain number (no $ or commas), empty string if not found
 5. payment_type: the payment method, one of: "Credit Card", "Debit Card", "Unknown Card", "Cash", "Check", "Other", or empty string if not found. Use "Unknown Card" when a card brand (Visa, Mastercard, Amex, Discover, etc.) is detected but credit vs debit is not specified on the receipt
 6. card_last4: the last 4 digits of the payment card if visible on receipt, empty string if not found or if cash/check
 7. card_type: the card network if visible, e.g. "Visa", "Mastercard", "Amex", "Discover", empty string if not found
@@ -2072,7 +2078,7 @@ async function scanWithAI() {
    - "Meals" — restaurants, cafes, fast food, catering, coffee shops, food delivery
    - "Other" — anything that does not clearly fit the above
 Respond ONLY with raw JSON, no markdown, no extra text:
-{"store_name":"","date":"","total":"","tax":"","payment_type":"","card_last4":"","card_type":"","category":""}`}
+{"store_name":"","date":"","total":"","tax":"","tip":"","payment_type":"","card_last4":"","card_type":"","category":""}`}
         ]}]
       })
     });
@@ -2097,6 +2103,7 @@ Respond ONLY with raw JSON, no markdown, no extra text:
     if(parsed.date&&/\d{4}-\d{2}-\d{2}/.test(parsed.date)){editForm.date=parsed.date;filled.push('date');}
     if(parsed.total&&!isNaN(parseFloat(parsed.total))){editForm.amount=parseFloat(parsed.total).toFixed(2);filled.push('amount');}
     if(parsed.tax&&!isNaN(parseFloat(parsed.tax))){editForm.tax=parseFloat(parsed.tax).toFixed(2);filled.push('tax');}
+    if(parsed.tip&&!isNaN(parseFloat(parsed.tip))){editForm.tip=parseFloat(parsed.tip).toFixed(2);filled.push('tip');}
     if(parsed.payment_type&&VALID_PAY.includes(parsed.payment_type)){editForm.paymentType=parsed.payment_type;filled.push('payment');}
     if(parsed.card_last4&&/^\d{4}$/.test(parsed.card_last4)){editForm.cardLast4=parsed.card_last4;}
     if(parsed.card_type){editForm.cardType=parsed.card_type;}
@@ -2170,7 +2177,8 @@ async function doSave() {
   const payType  = editForm.paymentType || '';
   const last4    = editForm.cardLast4   || '';
   const cardType = editForm.cardType    || '';
-  const r={id:crypto.randomUUID(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,createdAt:new Date().toISOString(),orgId:currentOrg?.id||null,submittedBy:currentUser?.email||null};
+  const tip=editForm.tip?parseFloat(String(editForm.tip).replace(/[^0-9.]/g,''))||null:null;
+  const r={id:crypto.randomUUID(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,tip,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,createdAt:new Date().toISOString(),orgId:currentOrg?.id||null,submittedBy:currentUser?.email||null};
   await persistReceipt(r);
   pendingImage=null;pendingB64=null;scanStatus=null;
   editForm={store:'',date:'',amount:'',tax:'',paymentType:'',cardLast4:'',cardType:'',category:'Fuel',notes:''};
@@ -2203,6 +2211,7 @@ function viewReceipt(id) {
     ${adminViewAll && r.submittedBy ? `<div class="mrow"><span class="mlabel">Submitted by</span><span class="mval" style="font-size:13px">${esc(r.submittedBy)}</span></div>` : ''}
     <div class="mrow"><span class="mlabel">Total</span><span class="mval" style="color:var(--accent);font-size:20px">${fmt(r.amount)}</span></div>
     ${r.tax!=null&&r.tax!==''?`<div class="mrow"><span class="mlabel">Tax</span><span class="mval">${fmt(r.tax)}</span></div>`:''}
+    ${r.tip!=null&&r.tip!==''?`<div class="mrow"><span class="mlabel">Tip</span><span class="mval">${fmt(r.tip)}</span></div>`:''} 
     <div class="mrow"><span class="mlabel">Date</span><span class="mval">${r.date||'—'}</span></div>
     <div class="mrow"><span class="mlabel">Category</span><span class="mval"><span class="badge ${r.category}">${r.category}</span></span></div>
     ${r.paymentType?`<div class="mrow"><span class="mlabel">Payment</span><span class="mval">${r.cardType?r.cardType+' ':''}${r.paymentType}${r.cardLast4?' ····'+r.cardLast4:''}</span></div>`:''}
@@ -2233,6 +2242,8 @@ function editReceipt(id) {
     </div>
     <div class="fg"><label class="fl">Tax Amount ($)</label>
       <input class="fi" id="e-tax" type="number" step="0.01" min="0" placeholder="0.00" value="${r.tax!=null?r.tax:''}" inputmode="decimal"></div>
+    <div class="fg"><label class="fl">Tip Amount ($)</label>
+      <input class="fi" id="e-tip" type="number" step="0.01" min="0" placeholder="0.00" value="${r.tip!=null?r.tip:''}" inputmode="decimal"></div>
     <div class="fg"><label class="fl">Category</label>
       <select class="fsel" id="e-category">
         ${CATS.map(c=>`<option${r.category===c?' selected':''}>${c}</option>`).join('')}
@@ -2261,6 +2272,7 @@ async function saveEdit(id, btn) {
   const date     = document.getElementById('e-date')?.value;
   const amount   = document.getElementById('e-amount')?.value;
   const taxVal   = document.getElementById('e-tax')?.value;
+  const tipVal   = document.getElementById('e-tip')?.value;
   const payType  = document.getElementById('e-paytype')?.value;
   const cardType = document.getElementById('e-cardtype')?.value?.trim();
   const cardLast4= document.getElementById('e-cardlast4')?.value?.trim();
@@ -2269,7 +2281,7 @@ async function saveEdit(id, btn) {
   if(!amount||isNaN(parseFloat(amount))){alert('Please enter a valid amount.');return;}
   const idx=receipts.findIndex(r=>r.id===id);
   if(idx===-1) return;
-  receipts[idx]={...receipts[idx],store:store||'',date,amount:parseFloat(amount),tax:taxVal?parseFloat(taxVal):null,paymentType:payType||'',cardType:cardType||'',cardLast4:cardLast4||'',category,notes,updatedAt:new Date().toISOString()};
+  receipts[idx]={...receipts[idx],store:store||'',date,amount:parseFloat(amount),tax:taxVal?parseFloat(taxVal):null,tip:tipVal?parseFloat(tipVal):null,paymentType:payType||'',cardType:cardType||'',cardLast4:cardLast4||'',category,notes,updatedAt:new Date().toISOString()};
   await saveReceiptToSupabase(receipts[idx]);
   try { await dbPut('receipts', receipts[idx]); } catch(e) { lsFallback(); }
   lsBak();
@@ -2563,7 +2575,7 @@ async function onImport(e) {
 function exportToExcel() {
   if(!TIERS[userTier].excel){ showPaywall('Excel export is a Pro feature.'); return; }
   if(!receipts.length){alert('No receipts to export yet.');return;}
-  const rows=receipts.map(r=>({Date:r.date||'',Store:r.store||'',Amount:parseFloat(r.amount||0),Tax:r.tax!=null?parseFloat(r.tax):'',Payment:r.paymentType||'','Card Type':r.cardType||'','Last 4':r.cardLast4||'',Category:r.category||'',Notes:r.notes||'','Has Photo':r.image?'Yes':'No',Added:new Date(r.createdAt).toLocaleDateString()}));
+  const rows=receipts.map(r=>({Date:r.date||'',Store:r.store||'',Amount:parseFloat(r.amount||0),Tax:r.tax!=null?parseFloat(r.tax):'',Tip:r.tip!=null?parseFloat(r.tip):'',Payment:r.paymentType||'','Card Type':r.cardType||'','Last 4':r.cardLast4||'',Category:r.category||'',Notes:r.notes||'','Has Photo':r.image?'Yes':'No',Added:new Date(r.createdAt).toLocaleDateString()}));
   rows.push({},{Date:'',Store:'GRAND TOTAL',Amount:parseFloat(sum(receipts).toFixed(2)),Category:'',Notes:'','Has Photo':'',Added:''});
   const ws=XLSX.utils.json_to_sheet(rows);
   ws['!cols']=[12,26,12,10,14,12,8,14,26,10,14].map(w=>({wch:w}));
