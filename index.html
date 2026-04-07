@@ -1342,12 +1342,16 @@ function logoHtml(r, size=32) {
   if (!r.logoUrl) {
     return '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:' + r4 + 'px;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:' + sz2 + 'px;font-weight:700;color:white;flex-shrink:0;font-family:sans-serif">' + letter + '</div>';
   }
+  // base64 extracted logo — show directly, no fallback needed
+  if (r.logoUrl && r.logoUrl.startsWith('data:image')) {
+    return '<img data-logo="1" src="' + r.logoUrl + '" width="' + sz + '" height="' + sz + '" style="border-radius:' + r4 + 'px;object-fit:contain;background:white;border:1px solid var(--border);flex-shrink:0">';
+  }
   const googleFallback = 'https://www.google.com/s2/favicons?domain=' + (r.logoUrl||'').replace('https://icons.duckduckgo.com/ip3/','').replace('.ico','') + '&sz=128';
-  return '<img data-logo="1" src="' + r.logoUrl + '" width="' + sz + '" height="' + sz + '" style="border-radius:' + r4 + 'px;object-fit:contain;background:white;border:1px solid var(--border);flex-shrink:0" onerror="if(this.dataset.retry!==\'1\'){this.dataset.retry=\'1\';this.src=\''+googleFallback+'\'}else{this.style.display=\'none\';}">';
+  return '<img data-logo="1" src="' + r.logoUrl + '" width="' + sz + '" height="' + sz + '" style="border-radius:' + r4 + 'px;object-fit:contain;background:white;border:1px solid var(--border);flex-shrink:0" onerror="if(this.dataset.retry!==\'1\'){this.dataset.retry=\'1\';this.src=\''+googleFallback+'\'}else{this.style.display=\'none\';}">'; 
 }
 
 async function attachLogos(rList) {
-  const missing = rList.filter(r => r.store && !r.logoUrl);
+  const missing = rList.filter(r => r.store && (!r.logoUrl || r.logoUrl.startsWith('https://icons.duckduckgo') || r.logoUrl.startsWith('https://www.google.com/s2')));
   if (missing.length === 0) return;
 
   for (const r of missing) {
@@ -2104,6 +2108,10 @@ Respond ONLY with raw JSON, no markdown, no extra text:
     if(parsed.total&&!isNaN(parseFloat(parsed.total))){editForm.amount=parseFloat(parsed.total).toFixed(2);filled.push('amount');}
     if(parsed.tax&&!isNaN(parseFloat(parsed.tax))){editForm.tax=parseFloat(parsed.tax).toFixed(2);filled.push('tax');}
     if(parsed.tip&&!isNaN(parseFloat(parsed.tip))){editForm.tip=parseFloat(parsed.tip).toFixed(2);filled.push('tip');}
+    // Store extracted logo if provided
+    if(parsed.logo_base64 && parsed.logo_base64.startsWith('data:image')) {
+      editForm._extractedLogo = parsed.logo_base64;
+    }
     if(parsed.payment_type&&VALID_PAY.includes(parsed.payment_type)){editForm.paymentType=parsed.payment_type;filled.push('payment');}
     if(parsed.card_last4&&/^\d{4}$/.test(parsed.card_last4)){editForm.cardLast4=parsed.card_last4;}
     if(parsed.card_type){editForm.cardType=parsed.card_type;}
@@ -2178,7 +2186,10 @@ async function doSave() {
   const last4    = editForm.cardLast4   || '';
   const cardType = editForm.cardType    || '';
   const tip=editForm.tip?parseFloat(String(editForm.tip).replace(/[^0-9.]/g,''))||null:null;
-  const r={id:crypto.randomUUID(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,tip,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,createdAt:new Date().toISOString(),orgId:currentOrg?.id||null,submittedBy:currentUser?.email||null};
+  // Use AI-extracted logo if available, otherwise will be fetched by domain lookup
+  const extractedLogo = editForm._extractedLogo || null;
+  const r={id:crypto.randomUUID(),store:store||'',date,amount:parsedAmount,tax:tax?parseFloat(tax):null,tip,paymentType:payType,cardLast4:last4,cardType,category,notes,image:pendingImage||null,logoUrl:extractedLogo,createdAt:new Date().toISOString(),orgId:currentOrg?.id||null,submittedBy:currentUser?.email||null};
+  editForm._extractedLogo = null; // clear after use
   await persistReceipt(r);
   pendingImage=null;pendingB64=null;scanStatus=null;
   editForm={store:'',date:'',amount:'',tax:'',paymentType:'',cardLast4:'',cardType:'',category:'Fuel',notes:''};
